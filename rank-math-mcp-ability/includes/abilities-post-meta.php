@@ -44,18 +44,22 @@ class Post_Meta {
 			'rank-math-mcp/get-post-seo',
 			array(
 				'label'               => __( 'Get post SEO metadata', 'rank-math-mcp-ability' ),
-				'description'         => __( 'Returns the full Rank Math SEO metadata of a post: SEO title, meta description, focus keyword, robots and advanced robots, canonical URL, breadcrumb title, pillar flag, SEO score, Open Graph and Twitter overrides, and the schema types attached. Unset fields are null. Note: overlaps with the native rank-math/get-post-seo-meta ability; this bridge verb works regardless of Rank Math account connection.', 'rank-math-mcp-ability' ),
+				'description'         => __( 'Returns the full Rank Math SEO metadata of a post: SEO title, meta description, focus keyword, robots and advanced robots, canonical URL, breadcrumb title, pillar flag, SEO score, Open Graph and Twitter overrides, and the schema types attached. Unset fields are null. Provide id (the post/page ID) — post_id is also accepted as a deprecated alias. Note: overlaps with the native rank-math/get-post-seo-meta ability; this bridge verb works regardless of Rank Math account connection.', 'rank-math-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
-					'type'                 => 'object',
+					'type'                 => array( 'object', 'null' ),
 					'properties'           => array(
+						'id'      => array(
+							'type'        => 'integer',
+							'minimum'     => 1,
+							'description' => 'ID of the post or page to read. Preferred over post_id.',
+						),
 						'post_id' => array(
 							'type'        => 'integer',
 							'minimum'     => 1,
-							'description' => 'ID of the post or page to read.',
+							'description' => 'Deprecated alias for id, kept for backward compatibility. Use id instead.',
 						),
 					),
-					'required'             => array( 'post_id' ),
 					'additionalProperties' => false,
 				),
 				'output_schema'       => array(
@@ -118,15 +122,20 @@ class Post_Meta {
 			'rank-math-mcp/update-post-seo',
 			array(
 				'label'               => __( 'Update post SEO metadata', 'rank-math-mcp-ability' ),
-				'description'         => __( 'Updates Rank Math SEO metadata of a post. Provide only the fields to change: seo_title, seo_description, focus_keyword, canonical_url, breadcrumb_title (empty string clears each), robots (array of index/noindex/nofollow/noarchive/noimageindex/nosnippet; empty array clears), advanced_robots (object, e.g. {"max-snippet":-1}; empty object clears) and/or pillar_content (boolean). Returns {old,new} per changed field, read back after the write.', 'rank-math-mcp-ability' ),
+				'description'         => __( 'Updates Rank Math SEO metadata of a post. Provide id (the post/page ID; post_id is also accepted as a deprecated alias) plus only the fields to change: seo_title, seo_description, focus_keyword, canonical_url, breadcrumb_title (empty string clears each), robots (array of index/noindex/nofollow/noarchive/noimageindex/nosnippet; empty array clears), advanced_robots (object, e.g. {"max-snippet":-1}; empty object clears) and/or pillar_content (boolean). Returns {old,new} per changed field, read back after the write.', 'rank-math-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
-					'type'                 => 'object',
+					'type'                 => array( 'object', 'null' ),
 					'properties'           => array(
+						'id'               => array(
+							'type'        => 'integer',
+							'minimum'     => 1,
+							'description' => 'ID of the post or page to update. Preferred over post_id.',
+						),
 						'post_id'          => array(
 							'type'        => 'integer',
 							'minimum'     => 1,
-							'description' => 'ID of the post or page to update.',
+							'description' => 'Deprecated alias for id, kept for backward compatibility. Use id instead.',
 						),
 						'seo_title'        => array( 'type' => 'string', 'description' => 'SEO title. Empty string clears.' ),
 						'seo_description'  => array( 'type' => 'string', 'description' => 'Meta description. Empty string clears.' ),
@@ -147,7 +156,6 @@ class Post_Meta {
 						),
 						'pillar_content'   => array( 'type' => 'boolean', 'description' => 'Mark as pillar/cornerstone content.' ),
 					),
-					'required'             => array( 'post_id' ),
 					'additionalProperties' => false,
 				),
 				'output_schema'       => array(
@@ -164,15 +172,20 @@ class Post_Meta {
 			'rank-math-mcp/update-post-social',
 			array(
 				'label'               => __( 'Update post social (OG/Twitter) metadata', 'rank-math-mcp-ability' ),
-				'description'         => __( 'Updates the Open Graph and Twitter overrides of a post: facebook_title, facebook_description, facebook_image (URL), twitter_title, twitter_description, twitter_card_type (summary_large_image or summary_card) and twitter_use_facebook (boolean; when true Twitter reuses the Facebook fields). Empty string clears a field. Returns {old,new} per changed field.', 'rank-math-mcp-ability' ),
+				'description'         => __( 'Updates the Open Graph and Twitter overrides of a post: facebook_title, facebook_description, facebook_image (URL), twitter_title, twitter_description, twitter_card_type (summary_large_image or summary_card) and twitter_use_facebook (boolean; when true Twitter reuses the Facebook fields). Provide id (the post/page ID; post_id is also accepted as a deprecated alias). Empty string clears a field. Returns {old,new} per changed field.', 'rank-math-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
-					'type'                 => 'object',
+					'type'                 => array( 'object', 'null' ),
 					'properties'           => array(
+						'id'                   => array(
+							'type'        => 'integer',
+							'minimum'     => 1,
+							'description' => 'ID of the post or page to update. Preferred over post_id.',
+						),
 						'post_id'              => array(
 							'type'        => 'integer',
 							'minimum'     => 1,
-							'description' => 'ID of the post or page to update.',
+							'description' => 'Deprecated alias for id, kept for backward compatibility. Use id instead.',
 						),
 						'facebook_title'       => array( 'type' => 'string' ),
 						'facebook_description' => array( 'type' => 'string' ),
@@ -185,7 +198,6 @@ class Post_Meta {
 						),
 						'twitter_use_facebook' => array( 'type' => 'boolean' ),
 					),
-					'required'             => array( 'post_id' ),
 					'additionalProperties' => false,
 				),
 				'output_schema'       => array(
@@ -202,15 +214,20 @@ class Post_Meta {
 			'rank-math-mcp/update-post-schema',
 			array(
 				'label'               => __( 'Set post schema', 'rank-math-mcp-ability' ),
-				'description'         => __( 'Sets (or replaces) one schema block of the given type on a post, stored as the rank_math_schema_<type> post meta. The schema object is stored as provided; it should follow the structure Rank Math uses (with @type etc.). Use native rank-math/get-post-schema to inspect existing schema and supported types first. Returns {old,new} of the stored value.', 'rank-math-mcp-ability' ),
+				'description'         => __( 'Sets (or replaces) one schema block of the given type on a post, stored as the rank_math_schema_<type> post meta. Provide id (the post ID; post_id is also accepted as a deprecated alias). The schema object is stored as provided; it should follow the structure Rank Math uses (with @type etc.). Use native rank-math/get-post-schema to inspect existing schema and supported types first. Returns {old,new} of the stored value.', 'rank-math-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
 					'type'                 => 'object',
 					'properties'           => array(
+						'id'      => array(
+							'type'        => 'integer',
+							'minimum'     => 1,
+							'description' => 'ID of the post. Preferred over post_id.',
+						),
 						'post_id' => array(
 							'type'        => 'integer',
 							'minimum'     => 1,
-							'description' => 'ID of the post.',
+							'description' => 'Deprecated alias for id, kept for backward compatibility. Use id instead.',
 						),
 						'type'    => array(
 							'type'        => 'string',
@@ -222,7 +239,7 @@ class Post_Meta {
 							'description' => 'Schema data object to store.',
 						),
 					),
-					'required'             => array( 'post_id', 'type', 'schema' ),
+					'required'             => array( 'type', 'schema' ),
 					'additionalProperties' => false,
 				),
 				'output_schema'       => array(
@@ -239,15 +256,20 @@ class Post_Meta {
 			'rank-math-mcp/delete-post-schema',
 			array(
 				'label'               => __( 'Delete post schema', 'rank-math-mcp-ability' ),
-				'description'         => __( 'Deletes the schema block of the given type from a post (removes the rank_math_schema_<type> meta). Requires confirm: true. Destructive: the schema data is removed permanently.', 'rank-math-mcp-ability' ),
+				'description'         => __( 'Deletes the schema block of the given type from a post (removes the rank_math_schema_<type> meta). Provide id (the post ID; post_id is also accepted as a deprecated alias). Requires confirm: true. Destructive: the schema data is removed permanently.', 'rank-math-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
 					'type'                 => 'object',
 					'properties'           => array(
+						'id'      => array(
+							'type'        => 'integer',
+							'minimum'     => 1,
+							'description' => 'ID of the post. Preferred over post_id.',
+						),
 						'post_id' => array(
 							'type'        => 'integer',
 							'minimum'     => 1,
-							'description' => 'ID of the post.',
+							'description' => 'Deprecated alias for id, kept for backward compatibility. Use id instead.',
 						),
 						'type'    => array(
 							'type'        => 'string',
@@ -259,7 +281,7 @@ class Post_Meta {
 							'description' => 'Must be true to proceed.',
 						),
 					),
-					'required'             => array( 'post_id', 'type', 'confirm' ),
+					'required'             => array( 'type', 'confirm' ),
 					'additionalProperties' => false,
 				),
 				'output_schema'       => array(
@@ -384,8 +406,11 @@ class Post_Meta {
 	}
 
 	public static function cb_get_post_seo( $input ) {
-		$post_id = (int) $input['post_id'];
-		$post    = get_post( $post_id );
+		$post_id = Plugin::resolve_post_id( $input );
+		if ( is_wp_error( $post_id ) ) {
+			return $post_id;
+		}
+		$post = get_post( $post_id );
 		if ( ! $post ) {
 			return new \WP_Error( 'post_not_found', __( 'No post exists with the given ID.', 'rank-math-mcp-ability' ) );
 		}
@@ -490,7 +515,10 @@ class Post_Meta {
 	}
 
 	public static function cb_update_post_seo( $input ) {
-		$post_id = (int) $input['post_id'];
+		$post_id = Plugin::resolve_post_id( $input );
+		if ( is_wp_error( $post_id ) ) {
+			return $post_id;
+		}
 		if ( ! get_post( $post_id ) ) {
 			return new \WP_Error( 'post_not_found', __( 'No post exists with the given ID.', 'rank-math-mcp-ability' ) );
 		}
@@ -567,7 +595,10 @@ class Post_Meta {
 	}
 
 	public static function cb_update_post_social( $input ) {
-		$post_id = (int) $input['post_id'];
+		$post_id = Plugin::resolve_post_id( $input );
+		if ( is_wp_error( $post_id ) ) {
+			return $post_id;
+		}
 		if ( ! get_post( $post_id ) ) {
 			return new \WP_Error( 'post_not_found', __( 'No post exists with the given ID.', 'rank-math-mcp-ability' ) );
 		}
@@ -610,7 +641,10 @@ class Post_Meta {
 	}
 
 	public static function cb_update_post_schema( $input ) {
-		$post_id = (int) $input['post_id'];
+		$post_id = Plugin::resolve_post_id( $input );
+		if ( is_wp_error( $post_id ) ) {
+			return $post_id;
+		}
 		if ( ! get_post( $post_id ) ) {
 			return new \WP_Error( 'post_not_found', __( 'No post exists with the given ID.', 'rank-math-mcp-ability' ) );
 		}
@@ -639,7 +673,10 @@ class Post_Meta {
 			return new \WP_Error( 'confirm_required', __( 'Pass confirm: true to delete schema data.', 'rank-math-mcp-ability' ) );
 		}
 
-		$post_id = (int) $input['post_id'];
+		$post_id = Plugin::resolve_post_id( $input );
+		if ( is_wp_error( $post_id ) ) {
+			return $post_id;
+		}
 		if ( ! get_post( $post_id ) ) {
 			return new \WP_Error( 'post_not_found', __( 'No post exists with the given ID.', 'rank-math-mcp-ability' ) );
 		}

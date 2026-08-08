@@ -3,7 +3,7 @@
  * Plugin Name: Rank Math MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/rank-math-mcp-ability
  * Description: Full-coverage Rank Math SEO abilities for MCP. Per-post SEO metadata (core, robots, social, schema), settings, redirections, 404 monitor, sitemap tools, module toggling and analytics status.
- * Version: 2.0.2
+ * Version: 2.0.3
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -174,9 +174,36 @@ class Plugin {
 	// Shared permission callbacks
 	// ---------------------------------------------------------------------
 
-	public static function permission_edit_post( $input = null ): bool {
-		$post_id = isset( $input['post_id'] ) ? (int) $input['post_id'] : 0;
-		return $post_id > 0 && current_user_can( 'edit_post', $post_id );
+	public static function permission_edit_post( $input = null ) {
+		$post_id = self::resolve_post_id( $input );
+		if ( is_wp_error( $post_id ) ) {
+			return $post_id;
+		}
+		return current_user_can( 'edit_post', $post_id );
+	}
+
+	/**
+	 * Resolves a post id from the preferred `id` key, falling back to the
+	 * deprecated `post_id` alias. Returns a WP_Error (surfaced verbatim by
+	 * the MCP Adapter's execute-ability tool, instead of a generic
+	 * "Permission denied" — see docs/KOPRU-EKSIKLERI.md) when neither is a
+	 * positive integer, rather than silently defaulting to 0 and letting a
+	 * capability check on a non-existent object fail with no explanation.
+	 */
+	public static function resolve_post_id( $input ) {
+		$id = 0;
+		if ( isset( $input['id'] ) ) {
+			$id = (int) $input['id'];
+		} elseif ( isset( $input['post_id'] ) ) {
+			$id = (int) $input['post_id'];
+		}
+		if ( $id <= 0 ) {
+			return new \WP_Error(
+				'missing_id',
+				__( 'Provide "id" (the post/page ID). "post_id" is also accepted as a deprecated alias for backward compatibility.', 'rank-math-mcp-ability' )
+			);
+		}
+		return $id;
 	}
 
 	public static function permission_edit_posts( $input = null ): bool {
