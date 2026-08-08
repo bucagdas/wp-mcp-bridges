@@ -16,7 +16,7 @@ Part of [wp-mcp-bridges](../README.md) — see that page for the project overvie
 
 - **WordPress 7.0+** (the Abilities API ships from WordPress 6.9).
 - **PHP 8.0+**.
-- To expose the abilities over MCP, the **WordPress MCP Adapter** plugin must be active. Abilities still register on the core Abilities API (and its REST endpoints) without it.
+- To expose the abilities over MCP, the **WordPress MCP Adapter** plugin must be active (see [Installing the WordPress MCP Adapter](#installing-the-wordpress-mcp-adapter) below — it is not on the wordpress.org plugin directory). Abilities still register on the core Abilities API (and its REST endpoints) without it.
 
 ## Installation
 
@@ -29,6 +29,22 @@ After activating, confirm the abilities registered by visiting (authenticated):
 ```
 https://example.com/wp-json/wp-abilities/v1/abilities?category=wp-core-mcp
 ```
+
+### Installing the WordPress MCP Adapter
+
+The adapter is **not published on the wordpress.org plugin directory** — install it from its official source, [github.com/WordPress/mcp-adapter](https://github.com/WordPress/mcp-adapter):
+
+- **WP-CLI:**
+  ```bash
+  wp plugin install https://github.com/WordPress/mcp-adapter/releases/latest/download/mcp-adapter.zip --activate
+  ```
+- **Composer** (for plugin developers integrating it into their own build):
+  ```bash
+  composer require wordpress/mcp-adapter
+  ```
+- **Manual:** download the [latest release ZIP](https://github.com/WordPress/mcp-adapter/releases/latest) and upload it via **Plugins → Add New → Upload Plugin** in wp-admin.
+
+See the project's own [installation instructions](https://github.com/WordPress/mcp-adapter#installation) for more detail. The wordpress.org plugin search does list unrelated third-party plugins with similar names (e.g. "Royal MCP", "Easy MCP AI", "Enable Abilities for MCP") — none of those are this official adapter.
 
 ### Updates
 

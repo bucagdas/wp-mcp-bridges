@@ -50,16 +50,32 @@ Every bridge is a self-contained plugin — install only the ones you need:
 
 1. Open the bridge's own README (linked above) and download its zip from the linked release.
 2. In wp-admin, go to **Plugins → Add New → Upload Plugin**, choose the zip, and install.
-3. Activate it, then make sure the [WordPress MCP Adapter](https://wordpress.org/plugins/mcp-adapter/) plugin is active too, so the abilities are exposed as MCP tools.
+3. Activate it, then install and activate the WordPress MCP Adapter (see below) so the abilities are exposed as MCP tools.
 
 Each bridge checks for its own updates independently against a JSON file hosted in this repository — no separate update source or account needed. See the individual bridge READMEs for details.
+
+### Installing the WordPress MCP Adapter
+
+The adapter is **not published on the wordpress.org plugin directory** — install it from its official source, [github.com/WordPress/mcp-adapter](https://github.com/WordPress/mcp-adapter):
+
+- **WP-CLI:**
+  ```bash
+  wp plugin install https://github.com/WordPress/mcp-adapter/releases/latest/download/mcp-adapter.zip --activate
+  ```
+- **Composer** (for plugin developers integrating it into their own build):
+  ```bash
+  composer require wordpress/mcp-adapter
+  ```
+- **Manual:** download the [latest release ZIP](https://github.com/WordPress/mcp-adapter/releases/latest) and upload it via **Plugins → Add New → Upload Plugin** in wp-admin.
+
+See the project's own [installation instructions](https://github.com/WordPress/mcp-adapter#installation) for more detail. Note that the wordpress.org plugin search does list unrelated third-party plugins with similar names (e.g. "Royal MCP", "Easy MCP AI", "Enable Abilities for MCP") — none of those are the official WordPress MCP Adapter this repo's bridges are built for.
 
 ## Requirements
 
 - WordPress 7.0+ (Abilities API ships from WordPress 6.9).
 - PHP 8.0+.
 - The target plugin/theme each bridge is built for.
-- The WordPress MCP Adapter plugin, to expose abilities as MCP tools. Abilities also work over the core Abilities REST API without it.
+- The WordPress MCP Adapter plugin (see above), to expose abilities as MCP tools. Abilities also work over the core Abilities REST API without it.
 
 ## Contributing
 
