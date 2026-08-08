@@ -63,18 +63,22 @@ class Options {
 			'wp-core-mcp/update-option',
 			array(
 				'label'               => __( 'Update a site option', 'wp-core-mcp-ability' ),
-				'description'         => __( 'Updates one whitelisted WordPress option. Only options on the fixed whitelist can be written (see get-option/list-options); everything else is refused. Returns {old,new} read back after the write.', 'wp-core-mcp-ability' ),
+				'description'         => __( 'Updates one whitelisted WordPress option. Only options on the fixed writable whitelist can be written (a narrower list than get-option/list-options\' readable one — notably siteurl and home are excluded, since a wrong value there can make the whole site unreachable with no recovery path through this API); everything else is refused. admin_email additionally requires confirm: true, since changing it takes effect immediately and bypasses the confirmation-email step wp-admin\'s own Settings form uses. Returns {old,new} read back after the write.', 'wp-core-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
 					'type'                 => 'object',
 					'properties'           => array(
-						'name'  => array(
+						'name'    => array(
 							'type'        => 'string',
-							'enum'        => Plugin::OPTION_WHITELIST,
+							'enum'        => Plugin::OPTION_WRITE_WHITELIST,
 							'description' => 'Option name to update.',
 						),
-						'value' => array(
+						'value'   => array(
 							'description' => 'New value.',
+						),
+						'confirm' => array(
+							'type'        => 'boolean',
+							'description' => 'Required (must be true) when name is admin_email.',
 						),
 					),
 					'required'             => array( 'name', 'value' ),
@@ -128,8 +132,18 @@ class Options {
 
 	public static function cb_update( $input ) {
 		$name = (string) $input['name'];
-		if ( ! in_array( $name, Plugin::OPTION_WHITELIST, true ) ) {
+		if ( ! in_array( $name, Plugin::OPTION_WRITE_WHITELIST, true ) ) {
 			return new \WP_Error( 'not_whitelisted', __( 'This option is not on the writable whitelist.', 'wp-core-mcp-ability' ) );
+		}
+		if ( in_array( $name, Plugin::OPTION_CONFIRM_REQUIRED, true ) && true !== ( $input['confirm'] ?? false ) ) {
+			return new \WP_Error(
+				'confirm_required',
+				sprintf(
+					/* translators: %s: option name */
+					__( 'Pass confirm: true to update "%s" — this option controls where critical site notifications (including password resets) are sent.', 'wp-core-mcp-ability' ),
+					$name
+				)
+			);
 		}
 
 		$old = get_option( $name );

@@ -99,7 +99,7 @@ class Posts {
 			'wp-core-mcp/create-post',
 			array(
 				'label'               => __( 'Create a post', 'wp-core-mcp-ability' ),
-				'description'         => __( 'Creates a new post of the given post type. title is required; content, excerpt, status (default "draft") and parent (hierarchical types only) are optional.', 'wp-core-mcp-ability' ),
+				'description'         => __( 'Creates a new post of the given post type. title is required; content, excerpt, status (default "draft") and parent (hierarchical types only) are optional. Setting status to "publish", "private" or "future" additionally requires the publish_posts capability for this post type (checked before creation, since there is no post ID yet); "future" additionally requires date to be a genuinely future datetime — WordPress silently treats a "future" status with a non-future (or missing) date as an immediate publish, which would otherwise let a caller reach the same live-content result the publish_posts check exists to gate.', 'wp-core-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
 					'type'                 => 'object',
@@ -124,8 +124,13 @@ class Posts {
 						),
 						'status'    => array(
 							'type'        => 'string',
+							'enum'        => array( 'draft', 'pending', 'publish', 'private', 'future' ),
 							'default'     => 'draft',
-							'description' => 'Post status. Default "draft".',
+							'description' => 'Post status. Default "draft". "future" requires date to be set to a future datetime.',
+						),
+						'date'      => array(
+							'type'        => 'string',
+							'description' => 'Post date (Y-m-d H:i:s, site timezone). Required and must be in the future when status is "future"; ignored otherwise.',
 						),
 						'parent'    => array(
 							'type'        => 'integer',
@@ -150,7 +155,7 @@ class Posts {
 			'wp-core-mcp/update-post',
 			array(
 				'label'               => __( 'Update a post', 'wp-core-mcp-ability' ),
-				'description'         => __( 'Updates one or more core fields of an existing post: title, content, excerpt, status, parent. Returns {old,new} per changed field, read back after the write.', 'wp-core-mcp-ability' ),
+				'description'         => __( 'Updates one or more core fields of an existing post: title, content, excerpt, status, date, parent. Setting status to "publish", "private" or "future" additionally requires the publish_post capability for this post; "future" additionally requires date to be a genuinely future datetime (see create-post for why). status never accepts "trash" — use delete-post for that, which has its own confirm gate and capability check; allowing it here would be a second, less-guarded path to the same effect. Returns {old,new} per changed field, read back after the write.', 'wp-core-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
 					'type'                 => 'object',
@@ -163,7 +168,15 @@ class Posts {
 						'title'   => array( 'type' => 'string', 'minLength' => 1 ),
 						'content' => array( 'type' => 'string' ),
 						'excerpt' => array( 'type' => 'string' ),
-						'status'  => array( 'type' => 'string' ),
+						'status'  => array(
+							'type'        => 'string',
+							'enum'        => array( 'draft', 'pending', 'publish', 'private', 'future' ),
+							'description' => 'New status. "future" requires date to be set to a future datetime. Never "trash" — use delete-post.',
+						),
+						'date'    => array(
+							'type'        => 'string',
+							'description' => 'Post date (Y-m-d H:i:s, site timezone). Required and must be in the future when status is "future"; ignored otherwise.',
+						),
 						'parent'  => array( 'type' => 'integer', 'minimum' => 0 ),
 					),
 					'required'             => array( 'id' ),
@@ -485,18 +498,46 @@ class Posts {
 		return current_user_can( 'read_post', $id ) || current_user_can( 'edit_post', $id );
 	}
 
+	/**
+	 * Statuses that put content live (or visible to a wider audience
+	 * than draft/pending review) — these need the publish_posts/
+	 * publish_post capability, not just edit/create. wp_insert_post()/
+	 * wp_update_post() do not enforce this on their own (they are not
+	 * form handlers — see the wp_slash() notes elsewhere in this file
+	 * for the same "core doesn't protect you" lesson), so the ability
+	 * layer must. Confirmed empirically 2026-08-08 that WordPress
+	 * applies no automatic downgrade for any of these three when set
+	 * programmatically — including "future", which silently becomes an
+	 * immediate publish if the accompanying date isn't genuinely in the
+	 * future, so it needs the same gate as "publish" itself. See
+	 * docs/KOPRU-EKSIKLERI.md's security section.
+	 */
+	const ELEVATED_STATUSES = array( 'publish', 'private', 'future' );
+
 	public static function permission_create( $input = null ): bool {
 		$post_type = self::post_type_of_input( $input );
 		if ( ! Plugin::is_allowed_post_type( $post_type ) ) {
 			return false;
 		}
 		$obj = get_post_type_object( $post_type );
-		return current_user_can( $obj->cap->create_posts ?? $obj->cap->edit_posts );
+		if ( ! current_user_can( $obj->cap->create_posts ?? $obj->cap->edit_posts ) ) {
+			return false;
+		}
+		if ( isset( $input['status'] ) && in_array( $input['status'], self::ELEVATED_STATUSES, true ) ) {
+			return current_user_can( $obj->cap->publish_posts );
+		}
+		return true;
 	}
 
 	public static function permission_edit_post( $input = null ): bool {
 		$id = isset( $input['id'] ) ? (int) $input['id'] : 0;
-		return $id > 0 && current_user_can( 'edit_post', $id );
+		if ( $id <= 0 || ! current_user_can( 'edit_post', $id ) ) {
+			return false;
+		}
+		if ( isset( $input['status'] ) && in_array( $input['status'], self::ELEVATED_STATUSES, true ) ) {
+			return current_user_can( 'publish_post', $id );
+		}
+		return true;
 	}
 
 	public static function permission_delete_post( $input = null ): bool {
@@ -594,10 +635,36 @@ class Posts {
 		);
 	}
 
+	/**
+	 * WordPress silently treats a "future" post_status as an immediate
+	 * publish when post_date isn't genuinely after the current time
+	 * (confirmed empirically 2026-08-08 — see ELEVATED_STATUSES' note),
+	 * so this ability must reject that combination itself rather than
+	 * let the caller stumble into (or exploit) the same live-content
+	 * result publish_posts/publish_post is gated behind.
+	 */
+	private static function validate_future_date( $input ) {
+		if ( ! isset( $input['status'] ) || 'future' !== $input['status'] ) {
+			return true;
+		}
+		if ( empty( $input['date'] ) ) {
+			return new \WP_Error( 'missing_date', __( 'status "future" requires date to be set to a future datetime.', 'wp-core-mcp-ability' ) );
+		}
+		$timestamp = strtotime( (string) $input['date'] );
+		if ( false === $timestamp || $timestamp <= current_time( 'timestamp' ) ) {
+			return new \WP_Error( 'date_not_future', __( 'date must be a valid, genuinely future datetime when status is "future".', 'wp-core-mcp-ability' ) );
+		}
+		return true;
+	}
+
 	public static function cb_create( $input ) {
 		$post_type = isset( $input['post_type'] ) ? (string) $input['post_type'] : 'post';
 		if ( ! Plugin::is_allowed_post_type( $post_type ) ) {
 			return new \WP_Error( 'invalid_post_type', __( 'Unknown or disallowed post type.', 'wp-core-mcp-ability' ) );
+		}
+		$date_check = self::validate_future_date( $input );
+		if ( is_wp_error( $date_check ) ) {
+			return $date_check;
 		}
 
 		$args = array(
@@ -607,6 +674,9 @@ class Posts {
 			'post_excerpt' => isset( $input['excerpt'] ) ? (string) $input['excerpt'] : '',
 			'post_status'  => isset( $input['status'] ) ? (string) $input['status'] : 'draft',
 		);
+		if ( isset( $input['date'] ) ) {
+			$args['post_date'] = (string) $input['date'];
+		}
 		if ( isset( $input['parent'] ) && is_post_type_hierarchical( $post_type ) ) {
 			$args['post_parent'] = (int) $input['parent'];
 		}
@@ -630,12 +700,17 @@ class Posts {
 		if ( ! $post || ! Plugin::is_allowed_post_type( $post->post_type ) ) {
 			return new \WP_Error( 'post_not_found', __( 'No post exists with the given ID.', 'wp-core-mcp-ability' ) );
 		}
+		$date_check = self::validate_future_date( $input );
+		if ( is_wp_error( $date_check ) ) {
+			return $date_check;
+		}
 
 		$field_map = array(
 			'title'   => 'post_title',
 			'content' => 'post_content',
 			'excerpt' => 'post_excerpt',
 			'status'  => 'post_status',
+			'date'    => 'post_date',
 		);
 
 		$args    = array( 'ID' => $id );

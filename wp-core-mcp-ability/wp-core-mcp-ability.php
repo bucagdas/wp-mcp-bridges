@@ -3,7 +3,7 @@
  * Plugin Name: WP Core MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/wp-core-mcp-ability
  * Description: Full-coverage WordPress core abilities for MCP. Exposes WordPress's own native core/* abilities to MCP, plus generic options, posts, taxonomies/terms, comments and users CRUD.
- * Version: 1.3.2
+ * Version: 1.3.3
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -67,6 +67,47 @@ class Plugin {
 		'show_on_front', 'page_on_front', 'page_for_posts',
 		'blog_public',
 	);
+
+	/**
+	 * Writable subset of OPTION_WHITELIST — deliberately excludes
+	 * siteurl/home. Unlike every other option here (including
+	 * admin_email, gated instead via OPTION_CONFIRM_REQUIRED below), a
+	 * wrong siteurl/home value can make the entire site — including
+	 * wp-admin itself — unreachable through the web layer, with no
+	 * recovery path short of direct database or wp-config.php access.
+	 * A confirm gate doesn't meaningfully protect against this: the
+	 * realistic failure mode is a mistaken value (typo, wrong protocol)
+	 * that the caller already believes is correct, so confirming intent
+	 * doesn't catch the actual mistake. Still readable via get-option/
+	 * list-options (OPTION_WHITELIST) for legitimate diagnostics.
+	 * See docs/KOPRU-EKSIKLERI.md's security section.
+	 */
+	const OPTION_WRITE_WHITELIST = array(
+		'blogname', 'blogdescription', 'admin_email',
+		'timezone_string', 'gmt_offset', 'date_format', 'time_format',
+		'start_of_week', 'WPLANG',
+		'default_role', 'users_can_register',
+		'posts_per_page', 'default_comment_status', 'default_ping_status',
+		'comment_registration', 'close_comments_for_old_posts',
+		'close_comments_days_old', 'thread_comments', 'thread_comments_depth',
+		'page_comments', 'comments_per_page', 'default_comments_page',
+		'comment_order',
+		'permalink_structure', 'category_base', 'tag_base',
+		'show_on_front', 'page_on_front', 'page_for_posts',
+		'blog_public',
+	);
+
+	/**
+	 * Writable options that need explicit confirm: true. admin_email
+	 * receives every critical site notification (including password
+	 * resets) — WordPress's own wp-admin settings form only applies it
+	 * after the site owner clicks a confirmation link emailed to the
+	 * OLD address, but that flow lives in wp-admin's form handler, not
+	 * in update_option() itself, so a direct update_option() call (like
+	 * this ability's) bypasses it entirely and takes effect immediately.
+	 * Confirmed empirically 2026-08-08 — see docs/KOPRU-EKSIKLERI.md.
+	 */
+	const OPTION_CONFIRM_REQUIRED = array( 'admin_email' );
 
 	public static function init(): void {
 		add_action( 'wp_abilities_api_categories_init', array( __CLASS__, 'register_category' ) );
