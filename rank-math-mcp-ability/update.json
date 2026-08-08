@@ -1,0 +1,16 @@
+{
+    "name": "Rank Math MCP Ability",
+    "slug": "rank-math-mcp-ability",
+    "version": "2.0.0",
+    "author": "bucagdas",
+    "homepage": "https://github.com/bucagdas/wp-mcp-bridges/tree/main/rank-math-mcp-ability",
+    "requires": "7.0",
+    "tested": "7.0",
+    "requires_php": "8.0",
+    "download_url": "https://github.com/bucagdas/wp-mcp-bridges/releases/download/rank-math-mcp-ability-v2.0.0/rank-math-mcp-ability.zip",
+    "last_updated": "2026-08-08 08:52:35",
+    "sections": {
+        "description": "Full-coverage Rank Math SEO abilities for MCP. Per-post SEO metadata (core, robots, social, schema), settings, redirections, 404 monitor, sitemap tools, module toggling and analytics status.",
+        "changelog": "<h4>2.0.0</h4><ul><li>Initial public release: 24 abilities covering post SEO metadata, settings, redirections, 404 monitor, sitemap and module toggling.</li></ul>"
+    }
+}
