@@ -15,6 +15,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 class GB {
 
 	public static function register(): void {
+		// Hedef-agnostik çekirdek filtresi (CLAUDE.md "FİİL TASARIM
+		// KURALLARI"): wp-core-mcp'nin patch-post/update-post'u
+		// post_content yazmadan önce wp_core_mcp_pre_content_write'ı
+		// çağırır — wp-core-mcp'nin kendisi GenerateBlocks'u hiç bilmez,
+		// sadece dönen değerin WP_Error olup olmadığına bakar. Burada
+		// KENDİ blok tipimize (generateblocks/media) özel doğrulamayı
+		// bağlıyoruz. Bkz. docs/KOPRU-EKSIKLERI.md.
+		if ( Plugin::has_gb() ) {
+			add_filter( 'wp_core_mcp_pre_content_write', array( __CLASS__, 'check_media_block_sync' ), 10, 3 );
+		}
+
 		// 4. GenerateBlocks global styles — only when GB Pro is installed.
 		if ( Plugin::has_gb_pro() ) {
 			wp_register_ability(
@@ -427,6 +438,56 @@ class GB {
 					'execute_callback'    => array( __CLASS__, 'cb_list_gb_usage' ),
 					'permission_callback' => array( Plugin::class, 'permission_edit_posts' ),
 					'meta'                => Plugin::meta( true, false, true ),
+				)
+			);
+
+			wp_register_ability(
+				'generatepress-mcp/replace-gb-media',
+				array(
+					'label'               => __( 'Replace the image in a GenerateBlocks media block', 'generatepress-mcp-ability' ),
+					'description'         => __( 'Swaps which image a generateblocks/media block (identified by its uniqueId, in a post\'s post_content) points to, updating its JSON attributes (mediaId, htmlAttributes.src/alt/title) AND its rendered <img> tag together so the two never disagree — the exact mismatch wp_core_mcp_pre_content_write refuses if introduced by a raw edit (e.g. patch-post touching only the visible HTML). Provide media_id to point at a WordPress attachment (src/alt/title are derived from it); or provide src directly for a non-attachment value such as an external URL or a GenerateBlocks dynamic tag like "{{featured_image key:url}}" (mediaId is cleared in that case). This also works to repair a block that is ALREADY desynced — it overwrites both sides unconditionally, it does not require the block to already be consistent. Only operates on post_content; GP Elements whose content lives in postmeta instead are out of scope. Returns {old,new} for the block\'s media identity.', 'generatepress-mcp-ability' ),
+					'category'            => Plugin::CATEGORY,
+					'input_schema'        => array(
+						'type'                 => 'object',
+						'properties'           => array(
+							'id'       => array(
+								'type'        => 'integer',
+								'minimum'     => 1,
+								'description' => 'ID of the post containing the block.',
+							),
+							'block_id' => array(
+								'type'        => 'string',
+								'minLength'   => 1,
+								'description' => 'The target block\'s uniqueId attribute — visible in the block\'s JSON comment inside post_content, or in patch-post/get-post output.',
+							),
+							'media_id' => array(
+								'type'        => 'integer',
+								'minimum'     => 1,
+								'description' => 'WordPress attachment ID to point the block at. src/alt/title below are derived from it unless overridden.',
+							),
+							'src'      => array(
+								'type'        => 'string',
+								'description' => 'Explicit image URL. Required when media_id is omitted (e.g. an external URL or a GenerateBlocks dynamic tag like "{{featured_image key:url}}"); overrides the URL derived from media_id when both are given.',
+							),
+							'alt'      => array(
+								'type'        => 'string',
+								'description' => 'Explicit alt text. Overrides the value derived from media_id when given.',
+							),
+							'title'    => array(
+								'type'        => 'string',
+								'description' => 'Explicit title attribute. Overrides the value derived from media_id when given.',
+							),
+						),
+						'required'             => array( 'id', 'block_id' ),
+						'additionalProperties' => false,
+					),
+					'output_schema'       => array(
+						'type'        => 'object',
+						'description' => 'Object with "id", "block_id", "old" and "new" (each {media_id, src, alt, title}).',
+					),
+					'execute_callback'    => array( __CLASS__, 'cb_replace_gb_media' ),
+					'permission_callback' => array( Plugin::class, 'permission_edit_post' ),
+					'meta'                => Plugin::meta( false, false, true ),
 				)
 			);
 		}
@@ -1045,8 +1106,269 @@ class GB {
 		return new \WP_Error( 'library_not_found', __( 'No pattern library exists with the given id.', 'generatepress-mcp-ability' ) );
 	}
 
+	// ---------------------------------------------------------------------
+	// wp_core_mcp_pre_content_write filter callback (see register()'s
+	// docblock and CLAUDE.md's "hedef-agnostik çekirdek filtresi" pattern)
+	// ---------------------------------------------------------------------
+
 	/**
-	 * Recursively remove keys that may contain secrets from a settings array.
+	 * generateblocks/media stores every rendered <img> attribute TWICE:
+	 * once as literal HTML in the block's innerHTML, and again inside its
+	 * own attrs.htmlAttributes JSON object — a deliberate GenerateBlocks
+	 * design choice (unlike core/image, whose url/alt/title are sourced
+	 * FROM the HTML via block.json's "source":"attribute" binding, so
+	 * they can't independently drift). A raw string edit to post_content
+	 * (patch-post, or a hand-assembled update-post content field) can
+	 * change one copy without the other, producing a block Gutenberg
+	 * will flag as invalid content on next edit. Found on a live site
+	 * 2026-08-08; see docs/KOPRU-EKSIKLERI.md.
+	 *
+	 * mediaId itself is NOT checked here — it has no literal HTML
+	 * counterpart to compare against (it's not rendered as any tag
+	 * attribute), so there is nothing to diff. replace-gb-media keeps it
+	 * in sync by construction instead (it sets mediaId and htmlAttributes
+	 * together, deliberately, rather than detecting after the fact).
+	 *
+	 * @param string|\WP_Error $new_content The content wp-core-mcp is about to write, or a WP_Error if an earlier-registered callback already flagged a problem.
+	 * @param \WP_Post         $post        The post being modified.
+	 * @param string           $field       Always 'content' — wp-core-mcp only fires this filter for that field.
+	 * @return string|\WP_Error
 	 */
+	public static function check_media_block_sync( $new_content, $post, $field ) {
+		if ( is_wp_error( $new_content ) ) {
+			return $new_content;
+		}
+		if ( ! Plugin::has_gb() || false === strpos( $new_content, 'wp:generateblocks/media' ) ) {
+			return $new_content;
+		}
+
+		$mismatch = self::find_media_block_mismatch( parse_blocks( $new_content ) );
+		if ( null === $mismatch ) {
+			return $new_content;
+		}
+
+		return new \WP_Error(
+			'gb_media_block_desync',
+			sprintf(
+				/* translators: 1: block uniqueId, 2: HTML attribute name, 3: value in the block's JSON, 4: value actually in the rendered HTML */
+				__( 'GenerateBlocks media block (uniqueId: %1$s) has a mismatched "%2$s": the JSON attributes say "%3$s" but the rendered HTML has "%4$s". This usually means an edit changed the visible HTML without updating the block\'s JSON, which Gutenberg will likely flag as invalid content on next edit. Fix both together (or use generatepress-mcp/replace-gb-media to swap the image safely), or pass force_unsynced_blocks: true if this mismatch is intentional.', 'generatepress-mcp-ability' ),
+				$mismatch['unique_id'],
+				$mismatch['attribute'],
+				$mismatch['json_value'],
+				$mismatch['html_value']
+			),
+			$mismatch
+		);
+	}
+
+	/**
+	 * Recursively walks a parsed block tree for generateblocks/media
+	 * blocks whose attrs.htmlAttributes values don't match what's
+	 * literally rendered in their own innerHTML. Every key in
+	 * htmlAttributes is checked generically (not a hardcoded src/alt/
+	 * title list) since that attribute is, by GenerateBlocks' own
+	 * design, exactly "whatever gets put on the HTML tag" — src/alt/
+	 * title are just the common case found on real sites so far.
+	 *
+	 * @return array{block_name:string,unique_id:string,attribute:string,json_value:string,html_value:string}|null
+	 */
+	private static function find_media_block_mismatch( array $blocks ): ?array {
+		foreach ( $blocks as $block ) {
+			if ( 'generateblocks/media' === ( $block['blockName'] ?? null ) ) {
+				$html_attrs = (array) ( $block['attrs']['htmlAttributes'] ?? array() );
+				$inner_html = (string) ( $block['innerHTML'] ?? '' );
+				foreach ( $html_attrs as $attr => $expected_value ) {
+					if ( ! is_scalar( $expected_value ) ) {
+						continue; // only plain HTML-attribute values are checkable this way
+					}
+					$pattern = '/\s' . preg_quote( (string) $attr, '/' ) . '="([^"]*)"/';
+					if ( ! preg_match( $pattern, $inner_html, $m ) ) {
+						return array(
+							'block_name' => $block['blockName'],
+							'unique_id'  => (string) ( $block['attrs']['uniqueId'] ?? '(unknown)' ),
+							'attribute'  => (string) $attr,
+							'json_value' => (string) $expected_value,
+							'html_value' => '(attribute missing from rendered HTML)',
+						);
+					}
+					if ( $m[1] !== (string) $expected_value ) {
+						return array(
+							'block_name' => $block['blockName'],
+							'unique_id'  => (string) ( $block['attrs']['uniqueId'] ?? '(unknown)' ),
+							'attribute'  => (string) $attr,
+							'json_value' => (string) $expected_value,
+							'html_value' => $m[1],
+						);
+					}
+				}
+			}
+			if ( ! empty( $block['innerBlocks'] ) ) {
+				$nested = self::find_media_block_mismatch( $block['innerBlocks'] );
+				if ( null !== $nested ) {
+					return $nested;
+				}
+			}
+		}
+		return null;
+	}
+
+	// ---------------------------------------------------------------------
+	// replace-gb-media
+	// ---------------------------------------------------------------------
+
+	public static function cb_replace_gb_media( $input ) {
+		$post_id = (int) $input['id'];
+		$post    = get_post( $post_id );
+		if ( ! $post ) {
+			return new \WP_Error( 'post_not_found', __( 'No post exists with the given ID.', 'generatepress-mcp-ability' ) );
+		}
+		$block_id = (string) $input['block_id'];
+
+		if ( ! isset( $input['media_id'] ) && ! isset( $input['src'] ) ) {
+			return new \WP_Error( 'missing_media', __( 'Provide media_id (a WordPress attachment) or src (an explicit URL).', 'generatepress-mcp-ability' ) );
+		}
+
+		$new_media_id = isset( $input['media_id'] ) ? (int) $input['media_id'] : 0;
+		$src          = null;
+		$alt          = null;
+		$title        = null;
+
+		if ( $new_media_id > 0 ) {
+			if ( ! wp_attachment_is_image( $new_media_id ) ) {
+				return new \WP_Error( 'invalid_media_id', __( 'media_id does not point to an image attachment.', 'generatepress-mcp-ability' ) );
+			}
+			$src   = wp_get_attachment_url( $new_media_id );
+			$alt   = get_post_meta( $new_media_id, '_wp_attachment_image_alt', true );
+			$title = get_the_title( $new_media_id );
+		}
+		if ( isset( $input['src'] ) ) {
+			$src = (string) $input['src'];
+		}
+		if ( isset( $input['alt'] ) ) {
+			$alt = (string) $input['alt'];
+		}
+		if ( isset( $input['title'] ) ) {
+			$title = (string) $input['title'];
+		}
+		if ( null === $src || '' === $src ) {
+			return new \WP_Error( 'missing_src', __( 'Could not resolve a src — provide media_id (a valid image attachment) or src directly.', 'generatepress-mcp-ability' ) );
+		}
+		$alt   = ( null === $alt || '' === $alt ) ? null : $alt;
+		$title = ( null === $title || '' === $title ) ? null : $title;
+
+		$blocks = parse_blocks( (string) $post->post_content );
+		$old    = null;
+		$found  = self::replace_media_block( $blocks, $block_id, $new_media_id, $src, $alt, $title, $old );
+		if ( ! $found ) {
+			return new \WP_Error( 'block_not_found', __( 'No generateblocks/media block with that uniqueId was found in this post\'s content.', 'generatepress-mcp-ability' ) );
+		}
+
+		$new_content = serialize_blocks( $blocks );
+
+		// wp_update_post() expects SLASHED data — same contract as every
+		// other post-content write in this factory; see
+		// docs/KOPRU-EKSIKLERI.md's slashing section.
+		$result = wp_update_post( wp_slash( array( 'ID' => $post_id, 'post_content' => $new_content ) ), true );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		return array(
+			'id'       => $post_id,
+			'block_id' => $block_id,
+			'old'      => $old,
+			'new'      => array(
+				'media_id' => $new_media_id ?: null,
+				'src'      => $src,
+				'alt'      => $alt,
+				'title'    => $title,
+			),
+		);
+	}
+
+	/**
+	 * Recursively walks $blocks (by reference) for the generateblocks/media
+	 * block with the given uniqueId, replaces its mediaId/htmlAttributes
+	 * AND its rendered <img> tag in lockstep, and writes the block's
+	 * pre-change identity into $old. Returns true if found (and mutated),
+	 * false otherwise. Works identically regardless of whether the block
+	 * was already synced — this always overwrites both sides, so it also
+	 * doubles as a repair tool for an already-desynced block.
+	 */
+	private static function replace_media_block( array &$blocks, string $block_id, int $new_media_id, string $src, ?string $alt, ?string $title, ?array &$old ): bool {
+		foreach ( $blocks as &$block ) {
+			if ( 'generateblocks/media' === ( $block['blockName'] ?? null )
+				&& ( $block['attrs']['uniqueId'] ?? null ) === $block_id
+			) {
+				$old = array(
+					'media_id' => $block['attrs']['mediaId'] ?? null,
+					'src'      => $block['attrs']['htmlAttributes']['src'] ?? null,
+					'alt'      => $block['attrs']['htmlAttributes']['alt'] ?? null,
+					'title'    => $block['attrs']['htmlAttributes']['title'] ?? null,
+				);
+
+				if ( $new_media_id > 0 ) {
+					$block['attrs']['mediaId'] = $new_media_id;
+				} else {
+					unset( $block['attrs']['mediaId'] );
+				}
+
+				$html_attrs        = (array) ( $block['attrs']['htmlAttributes'] ?? array() );
+				$html_attrs['src'] = $src;
+				if ( null !== $alt ) {
+					$html_attrs['alt'] = $alt;
+				} else {
+					unset( $html_attrs['alt'] );
+				}
+				if ( null !== $title ) {
+					$html_attrs['title'] = $title;
+				} else {
+					unset( $html_attrs['title'] );
+				}
+				$block['attrs']['htmlAttributes'] = $html_attrs;
+
+				// Rebuild the rendered tag's src/alt/title in place,
+				// leaving every other attribute (class, custom data-*)
+				// and the tag's own formatting byte-identical.
+				$inner = (string) ( $block['innerHTML'] ?? '' );
+				$inner = self::set_html_attr( $inner, 'src', $src );
+				$inner = self::set_html_attr( $inner, 'alt', $alt );
+				$inner = self::set_html_attr( $inner, 'title', $title );
+				$block['innerHTML'] = $inner;
+				if ( isset( $block['innerContent'][0] ) ) {
+					$block['innerContent'][0] = $inner;
+				}
+
+				return true;
+			}
+			if ( ! empty( $block['innerBlocks'] ) ) {
+				if ( self::replace_media_block( $block['innerBlocks'], $block_id, $new_media_id, $src, $alt, $title, $old ) ) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Sets (or, if $value is null, removes) one HTML attribute's value on
+	 * the first tag in $html, preserving every other attribute and the
+	 * tag's exact formatting otherwise. Uses preg_replace_callback (not
+	 * preg_replace) so an arbitrary $value can never be misread as a
+	 * backreference.
+	 */
+	private static function set_html_attr( string $html, string $attr, ?string $value ): string {
+		$pattern = '/\s' . preg_quote( $attr, '/' ) . '="[^"]*"/';
+		if ( null === $value ) {
+			return preg_replace( $pattern, '', $html, 1 );
+		}
+		$escaped = esc_attr( $value );
+		if ( preg_match( $pattern, $html ) ) {
+			return preg_replace_callback( $pattern, fn() => ' ' . $attr . '="' . $escaped . '"', $html, 1 );
+		}
+		// Attribute wasn't present before (e.g. adding alt where none
+		// existed) — insert just before the tag's closing `/>` or `>`.
+		return preg_replace_callback( '/\s*(\/?>)/', fn( $m ) => ' ' . $attr . '="' . $escaped . '"' . $m[1], $html, 1 );
+	}
 
 }
