@@ -3,7 +3,7 @@
  * Plugin Name: Contact Form 7 MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/contact-form-7-mcp-ability
  * Description: Full-coverage Contact Form 7 abilities for MCP. Form CRUD, form tags, mail templates, messages, additional settings, config validation, status and test submission.
- * Version: 1.0.1
+ * Version: 1.0.2
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
