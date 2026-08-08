@@ -3,7 +3,7 @@
  * Plugin Name: GeneratePress MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/generatepress-mcp-ability
  * Description: GeneratePress ecosystem abilities for MCP. Theme settings, GP Premium module status, GP Elements (full CRUD), GenerateBlocks settings, global styles (full CRUD) and Pro pattern libraries. Components are detected at runtime; abilities of missing components are simply not registered.
- * Version: 1.3.3
+ * Version: 1.3.4
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -39,7 +39,7 @@ class Plugin {
 	 * refused by any future write ability. Same pattern as the Rank Math
 	 * bridge.
 	 */
-	const SENSITIVE_PATTERN = '/(api[_-]?key|token|secret|password|licen[cs]e|licensing|credential|auth|connect)/i';
+	const SENSITIVE_PATTERN = '/(api[_-]?key|token|secret|password|licen[cs]e|licensing|credential|authoriz|connect)/i';
 
 	/**
 	 * GP Premium modules as option-suffix => activation constant.
