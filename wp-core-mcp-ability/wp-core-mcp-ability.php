@@ -3,7 +3,7 @@
  * Plugin Name: WP Core MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/wp-core-mcp-ability
  * Description: Full-coverage WordPress core abilities for MCP. Exposes WordPress's own native core/* abilities to MCP, plus generic options, posts, taxonomies/terms, comments and users CRUD.
- * Version: 1.3.3
+ * Version: 1.3.4
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -220,6 +220,29 @@ class Plugin {
 	public static function is_allowed_taxonomy( string $taxonomy ): bool {
 		$obj = get_taxonomy( $taxonomy );
 		return $obj && $obj->public;
+	}
+
+	/**
+	 * Resolves a positive-integer identifier from $input[$key] (default
+	 * key 'id'), or a WP_Error if missing/invalid. The MCP Adapter's
+	 * execute-ability tool skips schema validation before calling an
+	 * ability's permission callback, so a wrong/missing parameter would
+	 * otherwise silently resolve to 0 here and surface only as a generic
+	 * "Permission denied" — see docs/KOPRU-EKSIKLERI.md.
+	 */
+	public static function resolve_id( $input, string $key = 'id' ) {
+		$id = isset( $input[ $key ] ) ? (int) $input[ $key ] : 0;
+		if ( $id <= 0 ) {
+			return new \WP_Error(
+				'missing_id',
+				sprintf(
+					/* translators: %s: expected parameter name */
+					__( 'Provide "%s" (a positive integer ID).', 'wp-core-mcp-ability' ),
+					$key
+				)
+			);
+		}
+		return $id;
 	}
 }
 

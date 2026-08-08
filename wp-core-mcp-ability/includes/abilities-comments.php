@@ -203,9 +203,12 @@ class Comments {
 		return current_user_can( 'moderate_comments' );
 	}
 
-	public static function permission_create( $input = null ): bool {
-		$post_id = isset( $input['post_id'] ) ? (int) $input['post_id'] : 0;
-		return $post_id > 0 && current_user_can( 'edit_post', $post_id );
+	public static function permission_create( $input = null ) {
+		$post_id = Plugin::resolve_id( $input, 'post_id' );
+		if ( is_wp_error( $post_id ) ) {
+			return $post_id;
+		}
+		return current_user_can( 'edit_post', $post_id );
 	}
 
 	public static function permission_moderate( $input = null ): bool {

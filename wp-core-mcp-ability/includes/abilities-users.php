@@ -240,19 +240,28 @@ class Users {
 		return current_user_can( 'create_users' );
 	}
 
-	public static function permission_edit_user( $input = null ): bool {
-		$id = isset( $input['id'] ) ? (int) $input['id'] : 0;
-		return $id > 0 && current_user_can( 'edit_user', $id );
+	public static function permission_edit_user( $input = null ) {
+		$id = Plugin::resolve_id( $input );
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+		return current_user_can( 'edit_user', $id );
 	}
 
-	public static function permission_promote( $input = null ): bool {
-		$id = isset( $input['id'] ) ? (int) $input['id'] : 0;
-		return $id > 0 && current_user_can( 'promote_user', $id );
+	public static function permission_promote( $input = null ) {
+		$id = Plugin::resolve_id( $input );
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+		return current_user_can( 'promote_user', $id );
 	}
 
-	public static function permission_delete_user( $input = null ): bool {
-		$id = isset( $input['id'] ) ? (int) $input['id'] : 0;
-		return $id > 0 && current_user_can( 'delete_user', $id );
+	public static function permission_delete_user( $input = null ) {
+		$id = Plugin::resolve_id( $input );
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+		return current_user_can( 'delete_user', $id );
 	}
 
 	// ---------------------------------------------------------------------

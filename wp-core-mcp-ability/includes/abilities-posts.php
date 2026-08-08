@@ -486,10 +486,10 @@ class Posts {
 		return current_user_can( $obj->cap->edit_posts );
 	}
 
-	public static function permission_read_post( $input = null ): bool {
-		$id = isset( $input['id'] ) ? (int) $input['id'] : 0;
-		if ( ! $id ) {
-			return false;
+	public static function permission_read_post( $input = null ) {
+		$id = Plugin::resolve_id( $input );
+		if ( is_wp_error( $id ) ) {
+			return $id;
 		}
 		$post = get_post( $id );
 		if ( ! $post || ! Plugin::is_allowed_post_type( $post->post_type ) ) {
@@ -529,9 +529,12 @@ class Posts {
 		return true;
 	}
 
-	public static function permission_edit_post( $input = null ): bool {
-		$id = isset( $input['id'] ) ? (int) $input['id'] : 0;
-		if ( $id <= 0 || ! current_user_can( 'edit_post', $id ) ) {
+	public static function permission_edit_post( $input = null ) {
+		$id = Plugin::resolve_id( $input );
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+		if ( ! current_user_can( 'edit_post', $id ) ) {
 			return false;
 		}
 		if ( isset( $input['status'] ) && in_array( $input['status'], self::ELEVATED_STATUSES, true ) ) {
@@ -540,9 +543,12 @@ class Posts {
 		return true;
 	}
 
-	public static function permission_delete_post( $input = null ): bool {
-		$id = isset( $input['id'] ) ? (int) $input['id'] : 0;
-		return $id > 0 && current_user_can( 'delete_post', $id );
+	public static function permission_delete_post( $input = null ) {
+		$id = Plugin::resolve_id( $input );
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+		return current_user_can( 'delete_post', $id );
 	}
 
 	/**
@@ -558,13 +564,16 @@ class Posts {
 		return (int) $revision->post_parent;
 	}
 
-	public static function permission_read_revision( $input = null ): bool {
-		$revision_id = isset( $input['revision_id'] ) ? (int) $input['revision_id'] : 0;
-		$parent_id   = $revision_id > 0 ? self::revision_parent_id( $revision_id ) : 0;
+	public static function permission_read_revision( $input = null ) {
+		$revision_id = Plugin::resolve_id( $input, 'revision_id' );
+		if ( is_wp_error( $revision_id ) ) {
+			return $revision_id;
+		}
+		$parent_id = self::revision_parent_id( $revision_id );
 		return $parent_id > 0 && current_user_can( 'edit_post', $parent_id );
 	}
 
-	public static function permission_restore_revision( $input = null ): bool {
+	public static function permission_restore_revision( $input = null ) {
 		return self::permission_read_revision( $input );
 	}
 
