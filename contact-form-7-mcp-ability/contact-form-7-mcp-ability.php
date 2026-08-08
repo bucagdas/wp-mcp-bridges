@@ -3,7 +3,7 @@
  * Plugin Name: Contact Form 7 MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/contact-form-7-mcp-ability
  * Description: Full-coverage Contact Form 7 abilities for MCP. Form CRUD, form tags, mail templates, messages, additional settings, config validation, status and test submission.
- * Version: 1.0.2
+ * Version: 1.0.3
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -40,7 +40,7 @@ class Plugin {
 	 * refused on write. CF7 core has no license/API-key surface itself,
 	 * but third-party module settings can appear in additional_settings.
 	 */
-	const SENSITIVE_PATTERN = '/(api[_-]?key|token|secret|password|licen[cs]e|credential|auth)/i';
+	const SENSITIVE_PATTERN = '/(api[_-]?key|token|secret|password|licen[cs]e|credential|authoriz)/i';
 
 	public static function init(): void {
 		add_action( 'wp_abilities_api_categories_init', array( __CLASS__, 'register_category' ) );
