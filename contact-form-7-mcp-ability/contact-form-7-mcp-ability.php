@@ -3,7 +3,7 @@
  * Plugin Name: Contact Form 7 MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/contact-form-7-mcp-ability
  * Description: Full-coverage Contact Form 7 abilities for MCP. Form CRUD, form tags, mail templates, messages, additional settings, config validation, status and test submission.
- * Version: 1.0.3
+ * Version: 1.0.4
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -127,23 +127,48 @@ class Plugin {
 		return current_user_can( 'wpcf7_read_contact_forms' );
 	}
 
-	public static function permission_read_form( $input = null ): bool {
-		$id = isset( $input['id'] ) ? (int) $input['id'] : 0;
-		return $id > 0 && current_user_can( 'wpcf7_read_contact_form', $id );
+	public static function permission_read_form( $input = null ) {
+		$id = self::resolve_id( $input );
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+		return current_user_can( 'wpcf7_read_contact_form', $id );
 	}
 
 	public static function permission_edit_forms( $input = null ): bool {
 		return current_user_can( 'wpcf7_edit_contact_forms' );
 	}
 
-	public static function permission_edit_form( $input = null ): bool {
-		$id = isset( $input['id'] ) ? (int) $input['id'] : 0;
-		return $id > 0 && current_user_can( 'wpcf7_edit_contact_form', $id );
+	public static function permission_edit_form( $input = null ) {
+		$id = self::resolve_id( $input );
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+		return current_user_can( 'wpcf7_edit_contact_form', $id );
 	}
 
-	public static function permission_delete_form( $input = null ): bool {
+	public static function permission_delete_form( $input = null ) {
+		$id = self::resolve_id( $input );
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+		return current_user_can( 'wpcf7_delete_contact_form', $id );
+	}
+
+	/**
+	 * Resolves the required `id` from $input as a positive integer, or a
+	 * WP_Error if missing/invalid. The MCP Adapter's execute-ability tool
+	 * skips schema validation before calling an ability's permission
+	 * callback, so a wrong/missing parameter would otherwise silently
+	 * resolve to 0 here and surface only as a generic "Permission denied"
+	 * — see docs/KOPRU-EKSIKLERI.md.
+	 */
+	private static function resolve_id( $input ) {
 		$id = isset( $input['id'] ) ? (int) $input['id'] : 0;
-		return $id > 0 && current_user_can( 'wpcf7_delete_contact_form', $id );
+		if ( $id <= 0 ) {
+			return new \WP_Error( 'missing_id', __( 'Provide "id" (a positive integer form ID).', 'contact-form-7-mcp-ability' ) );
+		}
+		return $id;
 	}
 }
 
