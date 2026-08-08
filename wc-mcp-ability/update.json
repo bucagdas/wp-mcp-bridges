@@ -1,0 +1,16 @@
+{
+    "name": "WooCommerce MCP Ability",
+    "slug": "wc-mcp-ability",
+    "version": "2.7.0",
+    "author": "bucagdas",
+    "homepage": "https://github.com/bucagdas/wp-mcp-bridges/tree/main/wc-mcp-ability",
+    "requires": "7.0",
+    "tested": "7.0",
+    "requires_php": "8.0",
+    "download_url": "https://github.com/bucagdas/wp-mcp-bridges/releases/download/wc-mcp-ability-v2.7.0/wc-mcp-ability.zip",
+    "last_updated": "2026-08-08 08:53:55",
+    "sections": {
+        "description": "WooCommerce abilities for MCP. Product/taxonomy/customer/coupon CRUD plus a generic wc/v3 REST request for the rest of the store.",
+        "changelog": "<h4>2.7.0</h4><ul><li>Initial public release: 30 abilities covering product category/tag/variation CRUD, customer and coupon CRUD, order creation/refund, payment gateway listing/toggling, product image/taxonomy assignment, and a generic wc/v3 REST passthrough.</li></ul>"
+    }
+}
