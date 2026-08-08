@@ -52,7 +52,7 @@ Each bridge:
 | --- | --- | --- | --- |
 | [`wp-core-mcp-ability`](wp-core-mcp-ability/) | WordPress core itself | 59 | WordPress only |
 | [`wc-mcp-ability`](wc-mcp-ability/) | WooCommerce | 30 | WooCommerce |
-| [`generatepress-mcp-ability`](generatepress-mcp-ability/) | GeneratePress / GP Premium / GenerateBlocks (Pro) | 39 | Any subset of the above |
+| [`generatepress-mcp-ability`](generatepress-mcp-ability/) | GeneratePress / GP Premium / GenerateBlocks (Pro) | 40 | Any subset of the above |
 | [`rank-math-mcp-ability`](rank-math-mcp-ability/) | Rank Math SEO | 24 | Rank Math SEO |
 | [`contact-form-7-mcp-ability`](contact-form-7-mcp-ability/) | Contact Form 7 | 19 | Contact Form 7 |
 
