@@ -155,7 +155,7 @@ class Posts {
 			'wp-core-mcp/update-post',
 			array(
 				'label'               => __( 'Update a post', 'wp-core-mcp-ability' ),
-				'description'         => __( 'Updates one or more core fields of an existing post: title, content, excerpt, status, date, parent. Setting status to "publish", "private" or "future" additionally requires the publish_post capability for this post; "future" additionally requires date to be a genuinely future datetime (see create-post for why). status never accepts "trash" — use delete-post for that, which has its own confirm gate and capability check; allowing it here would be a second, less-guarded path to the same effect. Returns {old,new} per changed field, read back after the write.', 'wp-core-mcp-ability' ),
+				'description'         => __( 'Updates one or more core fields of an existing post: title, content, excerpt, status, date, parent. Setting status to "publish", "private" or "future" additionally requires the publish_post capability for this post; "future" additionally requires date to be a genuinely future datetime (see create-post for why). status never accepts "trash" — use delete-post for that, which has its own confirm gate and capability check; allowing it here would be a second, less-guarded path to the same effect. When content is given and would desynchronize a Gutenberg block\'s JSON attributes from its rendered HTML (as flagged by another installed bridge — see force_unsynced_blocks), the write is refused with the specific block/attribute named. Returns {old,new} per changed field, read back after the write.', 'wp-core-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
 					'type'                 => 'object',
@@ -178,6 +178,11 @@ class Posts {
 							'description' => 'Post date (Y-m-d H:i:s, site timezone). Required and must be in the future when status is "future"; ignored otherwise.',
 						),
 						'parent'  => array( 'type' => 'integer', 'minimum' => 0 ),
+						'force_unsynced_blocks' => array(
+							'type'        => 'boolean',
+							'default'     => false,
+							'description' => 'When content is given and would leave a Gutenberg block\'s JSON attributes and rendered HTML disagreeing (e.g. a GenerateBlocks media block\'s src), the write is refused by default. Pass true to write anyway when the mismatch is intentional.',
+						),
 					),
 					'required'             => array( 'id' ),
 					'additionalProperties' => false,
@@ -395,7 +400,7 @@ class Posts {
 			'wp-core-mcp/patch-post',
 			array(
 				'label'               => __( 'Find-and-replace within a post field', 'wp-core-mcp-ability' ),
-				'description'         => __( 'Replaces text within one field (title, content or excerpt) of a post, without resending the whole field — for surgical fixes to large pages where update-post would require transmitting the entire content. dry_run and confirm are REQUIRED on every call — there is no default. Call once with dry_run: true first: it reports match_count and a ~80-character context snippet per match, and never writes. On a real write (dry_run: false, confirm: true), resolve which match(es) to touch via occurrence: omit it when "find" is unique (auto-resolves to that one); otherwise pass "first", "all", or a 1-based integer — an ambiguous multi-match call with occurrence omitted is refused. Pass expected_count to refuse the write outright if the live match count no longer equals what an earlier dry_run reported (guards against the content having changed since). find is a literal substring by default; set regex: true to match it as a PCRE pattern (no delimiters — wrapped internally; backreferences in replace are NOT supported, replace is always literal). Every write verifies, before returning, that everything outside the matched span(s) is byte-for-byte unchanged (old_hash/new_hash sha256 + integrity_verified), and is rejected with a concurrent_modification error if the post was modified by anything else between this call\'s read and write.', 'wp-core-mcp-ability' ),
+				'description'         => __( 'Replaces text within one field (title, content or excerpt) of a post, without resending the whole field — for surgical fixes to large pages where update-post would require transmitting the entire content. dry_run and confirm are REQUIRED on every call — there is no default. Call once with dry_run: true first: it reports match_count and a ~80-character context snippet per match, and never writes. On a real write (dry_run: false, confirm: true), resolve which match(es) to touch via occurrence: omit it when "find" is unique (auto-resolves to that one); otherwise pass "first", "all", or a 1-based integer — an ambiguous multi-match call with occurrence omitted is refused. Pass expected_count to refuse the write outright if the live match count no longer equals what an earlier dry_run reported (guards against the content having changed since). find is a literal substring by default; set regex: true to match it as a PCRE pattern (no delimiters — wrapped internally; backreferences in replace are NOT supported, replace is always literal). Every write verifies, before returning, that everything outside the matched span(s) is byte-for-byte unchanged (old_hash/new_hash sha256 + integrity_verified), and is rejected with a concurrent_modification error if the post was modified by anything else between this call\'s read and write. When field is "content", a patch that would desynchronize a Gutenberg block\'s JSON attributes from its rendered HTML (as flagged by another installed bridge — see force_unsynced_blocks) is refused with the specific block/attribute named; a dry_run call reports the same as a non-blocking warning.', 'wp-core-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
 					'type'                 => 'object',
@@ -445,13 +450,18 @@ class Posts {
 							'type'        => 'boolean',
 							'description' => 'REQUIRED. true = report matches only, write nothing.',
 						),
+						'force_unsynced_blocks' => array(
+							'type'        => 'boolean',
+							'default'     => false,
+							'description' => 'When field is "content" and the result would leave a Gutenberg block\'s JSON attributes and rendered HTML disagreeing (as reported by another installed bridge, e.g. a GenerateBlocks media block\'s src), the write is refused by default. Pass true to write anyway when the mismatch is intentional. In dry_run, a detected mismatch is reported as a warning regardless of this flag (never blocks dry_run).',
+						),
 					),
 					'required'             => array( 'id', 'find', 'confirm', 'dry_run' ),
 					'additionalProperties' => false,
 				),
 				'output_schema'       => array(
 					'type'        => 'object',
-					'description' => 'dry_run: {dry_run:true, match_count, matches:[{occurrence,context}]}. Real write: {id, field, old_length, new_length, bytes_changed, old_hash, new_hash, integrity_verified, replaced_count}.',
+					'description' => 'dry_run: {dry_run:true, match_count, matches:[{occurrence,context}], block_sync_warning?}. Real write: {id, field, old_length, new_length, bytes_changed, old_hash, new_hash, integrity_verified, replaced_count}.',
 				),
 				'execute_callback'    => array( __CLASS__, 'cb_patch_post' ),
 				'permission_callback' => array( __CLASS__, 'permission_edit_post' ),
@@ -737,6 +747,13 @@ class Posts {
 
 		if ( empty( $updated ) ) {
 			return new \WP_Error( 'no_fields', __( 'Provide at least one field to change.', 'wp-core-mcp-ability' ) );
+		}
+
+		if ( array_key_exists( 'post_content', $args ) && empty( $input['force_unsynced_blocks'] ) ) {
+			$sync_error = self::check_content_sync( (string) $args['post_content'], $post, 'content' );
+			if ( $sync_error ) {
+				return $sync_error;
+			}
 		}
 
 		// See cb_create()'s identical wp_slash() note.
@@ -1056,6 +1073,57 @@ class Posts {
 		return hash( 'sha256', $reconstructed ) === hash( 'sha256', $original );
 	}
 
+	/**
+	 * Runs the wp_core_mcp_pre_content_write filter and normalizes the
+	 * result: null when the content is fine (or the check doesn't apply
+	 * — wrong field, or no Gutenberg block markup present at all), or the
+	 * WP_Error a target-specific bridge raised.
+	 *
+	 * wp-core-mcp deliberately has NO knowledge of any specific block
+	 * type here — this is the hedef-agnostik çekirdek filtresi pattern
+	 * (CLAUDE.md): a bridge that DOES know a target's block shape (e.g.
+	 * generatepress-mcp for GenerateBlocks) hooks this filter itself.
+	 * Gated on a bare `<!-- wp:` substring check (universal Gutenberg
+	 * block-comment syntax, not target-specific) so ordinary posts with
+	 * no block markup never pay for parse_blocks()/filter dispatch at
+	 * all. See docs/KOPRU-EKSIKLERI.md.
+	 */
+	private static function check_content_sync( string $new_content, \WP_Post $post, string $field ): ?\WP_Error {
+		if ( 'content' !== $field || false === strpos( $new_content, '<!-- wp:' ) ) {
+			return null;
+		}
+		$result = apply_filters( 'wp_core_mcp_pre_content_write', $new_content, $post, $field );
+		return is_wp_error( $result ) ? $result : null;
+	}
+
+	/**
+	 * Best-effort match resolution for dry_run's block-sync PREVIEW only —
+	 * mirrors the real write path's occurrence rules below but returns
+	 * null (never a WP_Error) whenever it can't be resolved without more
+	 * caller input, since dry_run must keep working without an occurrence
+	 * for ambiguous matches. Does not replace the real path's own inline
+	 * resolution/error messages.
+	 */
+	private static function try_resolve_occurrence_for_preview( array $matches, int $count, $input ): ?array {
+		if ( 1 === $count ) {
+			return array( $matches[0] );
+		}
+		if ( ! isset( $input['occurrence'] ) ) {
+			return null;
+		}
+		if ( 'all' === $input['occurrence'] ) {
+			return $matches;
+		}
+		if ( 'first' === $input['occurrence'] ) {
+			return array( $matches[0] );
+		}
+		$occurrence = (int) $input['occurrence'];
+		if ( $occurrence < 1 || $occurrence > $count ) {
+			return null;
+		}
+		return array( $matches[ $occurrence - 1 ] );
+	}
+
 	public static function cb_patch_post( $input ) {
 		$id   = (int) $input['id'];
 		$post = get_post( $id );
@@ -1099,12 +1167,29 @@ class Posts {
 					'context'    => self::context_snippet( $current, $m['offset'], $m['length'] ),
 				);
 			}
-			return array(
+			$response = array(
 				'dry_run'     => true,
 				'field'       => $field,
 				'match_count' => $count,
 				'matches'     => $report,
 			);
+			// Best-effort preview: only possible when occurrence resolution
+			// isn't ambiguous (single match, or occurrence already given
+			// alongside dry_run) — see try_resolve_occurrence_for_preview().
+			if ( $count > 0 ) {
+				$preview_target = self::try_resolve_occurrence_for_preview( $matches, $count, $input );
+				if ( null !== $preview_target ) {
+					list( $preview_value, ) = self::apply_matches( $current, $preview_target, $replace );
+					$sync_error = self::check_content_sync( $preview_value, $post, $field );
+					if ( $sync_error ) {
+						$response['block_sync_warning'] = array(
+							'message' => $sync_error->get_error_message(),
+							'data'    => $sync_error->get_error_data(),
+						);
+					}
+				}
+			}
+			return $response;
 		}
 
 		if ( true !== ( $input['confirm'] ?? false ) ) {
@@ -1181,6 +1266,13 @@ class Posts {
 		$latest_modified_gmt = $wpdb->get_var( $wpdb->prepare( "SELECT post_modified_gmt FROM {$wpdb->posts} WHERE ID = %d", $id ) );
 		if ( null === $latest_modified_gmt || $latest_modified_gmt !== $base_modified_gmt ) {
 			return new \WP_Error( 'concurrent_modification', __( 'This post was modified by another request since it was read. Nothing was written — re-run dry_run: true and retry.', 'wp-core-mcp-ability' ) );
+		}
+
+		if ( empty( $input['force_unsynced_blocks'] ) ) {
+			$sync_error = self::check_content_sync( $new_value, $post, $field );
+			if ( $sync_error ) {
+				return $sync_error;
+			}
 		}
 
 		// wp_update_post() expects SLASHED data — passing $new_value raw
