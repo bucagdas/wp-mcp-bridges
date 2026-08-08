@@ -1,0 +1,141 @@
+# WooCommerce MCP Ability
+
+![WordPress](https://img.shields.io/badge/WordPress-7.0%2B-21759b)
+![PHP](https://img.shields.io/badge/PHP-8.0%2B-777bb4)
+![WooCommerce](https://img.shields.io/badge/WooCommerce-required-96588a)
+![License](https://img.shields.io/badge/license-GPL--2.0--or--later-3da638)
+
+A WordPress plugin that exposes WooCommerce store management to AI agents as **MCP tools**, built on the [WordPress Abilities API](https://developer.wordpress.org/apis/abilities-api/). It registers 30 WooCommerce abilities — product-category/tag/variation CRUD, customer and coupon CRUD, order creation/refund, payment gateway listing/toggling, product image/taxonomy assignment, plus a generic `wc/v3` REST passthrough — and marks them public so the [WordPress MCP Adapter](https://github.com/WordPress/mcp-adapter) surfaces them to AI clients such as Claude.
+
+The abilities also register on the core Abilities REST API (`/wp-json/wp-abilities/v1/`), so you can call them over plain HTTP with an application password.
+
+Part of [wp-mcp-bridges](../README.md) — see that page for the project overview and the full list of bridges.
+
+## Requirements
+
+- **WordPress 7.0+** (the Abilities API ships from WordPress 6.9).
+- **PHP 8.0+**.
+- **WooCommerce** active.
+- To expose the abilities over MCP, the **WordPress MCP Adapter** plugin must be active. Abilities still register on the core Abilities API (and its REST endpoints) without it.
+
+## Installation
+
+1. Download `wc-mcp-ability.zip` from the [latest release](https://github.com/bucagdas/wp-mcp-bridges/releases?q=wc-mcp-ability).
+2. In wp-admin, go to **Plugins → Add New → Upload Plugin**, choose the ZIP, and install.
+3. Click **Activate**.
+
+After activating, confirm the abilities registered by visiting (authenticated):
+
+```
+https://example.com/wp-json/wp-abilities/v1/abilities?category=wc-mcp
+```
+
+### Updates
+
+This plugin checks for updates against a JSON file hosted in this repository, roughly every 12 hours, the same way any self-hosted WordPress plugin does — no account or token needed. Because that file is served through GitHub's raw-content CDN, a freshly published release can take a few minutes to become visible as an update in wp-admin.
+
+## Usage
+
+### Over MCP
+
+On the MCP Adapter default server, public abilities are reached through the adapter's meta-tools (`discover-abilities`, `get-ability-info`, `execute-ability`) rather than being listed individually. A client discovers them, then executes by name:
+
+```json
+{
+  "ability_name": "wc-mcp/create-product-category",
+  "parameters": {
+    "name": "Bouquets",
+    "slug": "bouquets",
+    "description": "Hand-tied seasonal bouquets."
+  }
+}
+```
+
+Using the generic ability for anything in the store:
+
+```json
+{
+  "ability_name": "wc-mcp/wc-request",
+  "parameters": {
+    "method": "GET",
+    "endpoint": "products",
+    "params": { "per_page": 5 }
+  }
+}
+```
+
+### Over the REST API
+
+The abilities are also available through the core Abilities REST API. The required HTTP method follows the ability's annotations: read-only → `GET`, write → `POST`, destructive → `DELETE`.
+
+```bash
+# Run a read-only ability (GET)
+curl -u 'USER:APP_PASSWORD' \
+  "https://example.com/wp-json/wp-abilities/v1/abilities/wc-mcp/list-product-categories/run"
+
+# Create a category (POST — input wrapped in "input")
+curl -u 'USER:APP_PASSWORD' -X POST -H 'Content-Type: application/json' \
+  -d '{"input":{"name":"Bouquets","slug":"bouquets"}}' \
+  "https://example.com/wp-json/wp-abilities/v1/abilities/wc-mcp/create-product-category/run"
+
+# Delete a category (DELETE — confirm: true required)
+curl -u 'USER:APP_PASSWORD' -X DELETE \
+  "https://example.com/wp-json/wp-abilities/v1/abilities/wc-mcp/delete-product-category/run?input%5Bid%5D=42&input%5Bconfirm%5D=true"
+```
+
+## Abilities
+
+| Ability | Type | Description |
+| --- | --- | --- |
+| `wc-mcp/list-product-categories` | read-only | List product categories. |
+| `wc-mcp/create-product-category` | write | Create a product category. |
+| `wc-mcp/update-product-category` | write | Update a product category by `id`. |
+| `wc-mcp/delete-product-category` | destructive | Delete a product category. Requires `confirm: true`. |
+| `wc-mcp/list-product-tags` | read-only | List product tags. |
+| `wc-mcp/create-product-tag` | write | Create a product tag. |
+| `wc-mcp/update-product-tag` | write | Update a product tag by `id`. |
+| `wc-mcp/delete-product-tag` | destructive | Delete a product tag. Requires `confirm: true`. |
+| `wc-mcp/list-customers` | read-only | List customers (WordPress users with the `customer` role). |
+| `wc-mcp/get-customer` | read-only | Full customer detail: core fields, billing/shipping, order stats. |
+| `wc-mcp/create-customer` | write | Create a customer. Password never returned. |
+| `wc-mcp/update-customer` | write | Update a customer by `id`. Password not settable here. |
+| `wc-mcp/delete-customer` | destructive | Delete a customer. Requires `confirm: true`. |
+| `wc-mcp/list-coupons` | read-only | List coupons. |
+| `wc-mcp/get-coupon` | read-only | Full coupon detail. |
+| `wc-mcp/create-coupon` | write | Create a coupon. `code` must be unique. |
+| `wc-mcp/update-coupon` | write | Update a coupon by `id`. |
+| `wc-mcp/delete-coupon` | destructive | Delete a coupon. Requires `confirm: true`. |
+| `wc-mcp/create-order` | write | Create an order with one or more line items. |
+| `wc-mcp/create-order-refund` | destructive | Refund an order. Requires `confirm: true`. |
+| `wc-mcp/list-product-variations` | read-only | List the variations of a variable product. |
+| `wc-mcp/get-product-variation` | read-only | Full variation detail. |
+| `wc-mcp/create-product-variation` | write | Create a variation under a variable product. |
+| `wc-mcp/update-product-variation` | write | Update a variation by `id`. |
+| `wc-mcp/delete-product-variation` | destructive | Delete a variation. Requires `confirm: true`. |
+| `wc-mcp/list-payment-gateways` | read-only | List payment gateways (secret-shaped settings redacted). |
+| `wc-mcp/toggle-payment-gateway` | write | Enable/disable a gateway. Never writes other settings. |
+| `wc-mcp/assign-product-terms` | write | Set a product's categories/tags (replaces the full assignment). |
+| `wc-mcp/update-product-images` | write | Set a product's featured image/gallery (replaces the full gallery). |
+| `wc-mcp/wc-request` | destructive | Run any WooCommerce REST (`wc/v3`) request. Full store access; `confirm: true` required for POST/PUT/DELETE. |
+
+All writes read the value back after writing and return `{old, new}`. Destructive verbs require `confirm: true`.
+
+## Permissions & security
+
+All abilities require the `manage_woocommerce` capability and run **as the authenticated WordPress user**.
+
+> ⚠️ **`wc-mcp/wc-request` grants full WooCommerce admin access.** Connect with a dedicated user and application password, not a shared admin login, and grant the least privilege necessary.
+
+## Tested versions
+
+- WordPress: 7.0
+- WooCommerce: 11.0
+- WordPress MCP Adapter: 0.5.0
+
+## About this fork
+
+This project started as a fork of [`woocommerce/wc-mcp-ability`](https://github.com/woocommerce/wc-mcp-ability), the upstream demo that shows a single ability, and was extended into a full store-management toolset.
+
+## License
+
+GPLv2 or later — see the [repository LICENSE](../LICENSE).

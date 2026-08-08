@@ -1,0 +1,87 @@
+# GeneratePress MCP Ability
+
+![WordPress](https://img.shields.io/badge/WordPress-7.0%2B-21759b)
+![PHP](https://img.shields.io/badge/PHP-8.0%2B-777bb4)
+![License](https://img.shields.io/badge/license-GPL--2.0--or--later-3da638)
+
+A WordPress plugin that exposes the GeneratePress ecosystem (theme, GP Premium, GenerateBlocks, GenerateBlocks Pro) to AI agents as **MCP tools**, built on the [WordPress Abilities API](https://developer.wordpress.org/apis/abilities-api/). It registers 39 abilities — theme settings, theme mods, GP Premium module status, full GP Elements CRUD, GenerateBlocks settings, full global-styles CRUD, pattern libraries and customizer import/export — and marks them public so the [WordPress MCP Adapter](https://github.com/WordPress/mcp-adapter) surfaces them to AI clients such as Claude.
+
+The abilities also register on the core Abilities REST API (`/wp-json/wp-abilities/v1/`), so you can call them over plain HTTP with an application password.
+
+Registration is **component-conditional**: abilities for a missing component (e.g. GP Premium not installed) simply aren't registered, and a one-line admin notice lists what's missing. The plugin stays fully functional on a partial install (theme only, no premium/blocks).
+
+Part of [wp-mcp-bridges](../README.md) — see that page for the project overview and the full list of bridges.
+
+## Requirements
+
+- **WordPress 7.0+** (the Abilities API ships from WordPress 6.9).
+- **PHP 8.0+**.
+- Any subset of: **GeneratePress** theme, **GP Premium**, **GenerateBlocks**, **GenerateBlocks Pro** — abilities register per detected component.
+- To expose the abilities over MCP, the **WordPress MCP Adapter** plugin must be active. Abilities still register on the core Abilities API (and its REST endpoints) without it.
+
+## Installation
+
+1. Download `generatepress-mcp-ability.zip` from the [latest release](https://github.com/bucagdas/wp-mcp-bridges/releases?q=generatepress-mcp-ability).
+2. In wp-admin, go to **Plugins → Add New → Upload Plugin**, choose the ZIP, and install.
+3. Click **Activate**.
+
+After activating, confirm the abilities registered by visiting (authenticated):
+
+```
+https://example.com/wp-json/wp-abilities/v1/abilities?category=generatepress-mcp
+```
+
+### Updates
+
+This plugin checks for updates against a JSON file hosted in this repository, roughly every 12 hours, the same way any self-hosted WordPress plugin does — no account or token needed. Because that file is served through GitHub's raw-content CDN, a freshly published release can take a few minutes to become visible as an update in wp-admin.
+
+## Usage
+
+### Over MCP
+
+```json
+{
+  "ability_name": "generatepress-mcp/create-gp-element",
+  "parameters": {
+    "type": "hook",
+    "title": "Footer notice",
+    "content": "<p>Custom footer content</p>",
+    "hook": "wp_footer"
+  }
+}
+```
+
+### Over the REST API
+
+```bash
+curl -u 'USER:APP_PASSWORD' \
+  "https://example.com/wp-json/wp-abilities/v1/abilities/generatepress-mcp/get-status/run"
+```
+
+## Abilities
+
+| Ability | Requires | Description |
+| --- | --- | --- |
+| `get-status` | — | Component versions, GP Premium module map, element/global-style counts, dynamic CSS cache info. |
+| `get-theme-settings` / `update-theme-setting` | Theme | Read/write GeneratePress theme settings. |
+| `get-theme-mods` / `update-theme-mod` | Theme | Site Identity logo, Copyright text, menu locations, Custom CSS, typography mods. |
+| `export-customizer-settings` / `import-customizer-settings` | Theme | Snapshot/restore modules, mods and options (full or scoped: global colors, typography). Import requires `dry_run` and `confirm: true`. |
+| `list-gp-elements` / `get-gp-element` / `create-gp-element` / `update-gp-element` / `delete-gp-element` | GP Premium | Full GP Elements CRUD (headers, hooks, popups, blocks, disable-elements). |
+| `get-gb-settings` | GenerateBlocks | Settings, versions, dynamic CSS cache info. |
+| `get-gb-global-styles` / `create-gb-global-style` / `update-gb-global-style` / `delete-gb-global-style` | GenerateBlocks Pro | Full global-style CRUD. |
+| `list-gb-pattern-libraries` / `get-gb-pattern-library` / `update-gb-pattern-library` / `delete-gb-pattern-library` | GenerateBlocks Pro | Local pattern-library management (no remote requests; credentials redacted). |
+
+All writes read the value back after writing and return `{old, new}`. Destructive verbs and module toggling require `confirm: true`. License/activation data is never read or returned by any ability.
+
+## Tested versions
+
+- WordPress: 7.0
+- GeneratePress theme: 3.6
+- GP Premium: 2.5
+- GenerateBlocks: 2.4
+- GenerateBlocks Pro: 2.7
+- WordPress MCP Adapter: 0.5.0
+
+## License
+
+GPLv2 or later — see the [repository LICENSE](../LICENSE).

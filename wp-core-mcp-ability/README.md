@@ -1,0 +1,89 @@
+# WP Core MCP Ability
+
+![WordPress](https://img.shields.io/badge/WordPress-7.0%2B-21759b)
+![PHP](https://img.shields.io/badge/PHP-8.0%2B-777bb4)
+![License](https://img.shields.io/badge/license-GPL--2.0--or--later-3da638)
+
+A WordPress plugin that exposes standard WordPress core management to AI agents as **MCP tools**, built on the [WordPress Abilities API](https://developer.wordpress.org/apis/abilities-api/). It registers abilities across options, posts (including revisions and a surgical find/replace patch verb), taxonomies/terms, comments, users, menus, block widgets, media, plugin/theme status, Site Health, cron and rewrite rules — and marks them public so the [WordPress MCP Adapter](https://github.com/WordPress/mcp-adapter) surfaces them to AI clients such as Claude. It also flips on WordPress's own native `core/*` abilities, which ship without MCP visibility by default.
+
+The abilities also register on the core Abilities REST API (`/wp-json/wp-abilities/v1/`), so you can call them over plain HTTP with an application password.
+
+Post and taxonomy capability checks are resolved dynamically from `get_post_type_object()->cap` / `get_taxonomy()->cap` — there's no hardcoded "post" or "category" — so the same abilities work correctly against any post type or taxonomy the site registers.
+
+Part of [wp-mcp-bridges](../README.md) — see that page for the project overview and the full list of bridges.
+
+## Requirements
+
+- **WordPress 7.0+** (the Abilities API ships from WordPress 6.9).
+- **PHP 8.0+**.
+- To expose the abilities over MCP, the **WordPress MCP Adapter** plugin must be active. Abilities still register on the core Abilities API (and its REST endpoints) without it.
+
+## Installation
+
+1. Download `wp-core-mcp-ability.zip` from the [latest release](https://github.com/bucagdas/wp-mcp-bridges/releases?q=wp-core-mcp-ability).
+2. In wp-admin, go to **Plugins → Add New → Upload Plugin**, choose the ZIP, and install.
+3. Click **Activate**.
+
+After activating, confirm the abilities registered by visiting (authenticated):
+
+```
+https://example.com/wp-json/wp-abilities/v1/abilities?category=wp-core-mcp
+```
+
+### Updates
+
+This plugin checks for updates against a JSON file hosted in this repository, roughly every 12 hours, the same way any self-hosted WordPress plugin does — no account or token needed. Because that file is served through GitHub's raw-content CDN, a freshly published release can take a few minutes to become visible as an update in wp-admin.
+
+## Usage
+
+### Over MCP
+
+```json
+{
+  "ability_name": "wp-core-mcp/patch-post",
+  "parameters": {
+    "id": 42,
+    "field": "content",
+    "find": "<svg[^>]*>.*?</svg>",
+    "replace": "<svg>...</svg>",
+    "regex": true,
+    "occurrence": "all",
+    "confirm": true
+  }
+}
+```
+
+### Over the REST API
+
+```bash
+curl -u 'USER:APP_PASSWORD' \
+  "https://example.com/wp-json/wp-abilities/v1/abilities/wp-core-mcp/list-posts/run?input[post_type]=post"
+```
+
+## Abilities
+
+| Group | Abilities |
+| --- | --- |
+| Native `core/*` exposure | `get-site-info`, `get-user-info`, `get-environment-info` (WordPress's own abilities, just flagged for MCP visibility). |
+| Options | `get-option` / `list-options` / `update-option` — whitelist-only, never the full options table. |
+| Posts | `list-posts` / `get-post` / `create-post` / `update-post` / `delete-post` / `get-post-meta` / `update-post-meta` / `patch-post` — surgical literal or regex find/replace with hash-based integrity verification and an optimistic per-post write lock. |
+| Revisions | `list-revisions` / `get-revision` / `restore-revision`. |
+| Taxonomies & terms | `list-taxonomies` / `list-terms` / `get-term` / `create-term` / `update-term` / `delete-term` — works with any public taxonomy. |
+| Comments | `list-comments` / `get-comment` / `create-comment` / `update-comment-status` / `delete-comment`. |
+| Users | `list-users` / `get-user` / `create-user` / `update-user` / `update-user-role` / `delete-user`. Password hashes are never read or returned. |
+| Menus | `list-menus` / `get-menu` / `create-menu` / `delete-menu` / `add-menu-item` / `update-menu-item` / `delete-menu-item` / `assign-menu-location`. |
+| Widgets | `list-sidebars` / `get-sidebar-widgets` / `add-block-widget` / `update-block-widget` / `delete-block-widget` / `list-legacy-widgets` (read-only inventory). |
+| Media | `list-media` / `get-media-details` / `upload-media` (base64 only, MIME-sniffed, 5MB cap). |
+| Plugins & themes | `list-plugins` / `get-plugin` / `list-themes` / `get-active-theme` — read-only, never installs/activates/switches anything. |
+| Site Health | `get-site-health-summary` / `get-site-health-info`. |
+| Cron & rewrite | `list-cron-events` / `create-cron-event` / `delete-cron-event` / `trigger-cron-event` / `flush-rewrite-rules`. |
+
+All writes read the value back after writing and return `{old, new}`. Destructive verbs require `confirm: true`.
+
+## Tested versions
+
+- WordPress: 7.0
+
+## License
+
+GPLv2 or later — see the [repository LICENSE](../LICENSE).

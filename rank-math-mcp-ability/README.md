@@ -1,0 +1,89 @@
+# Rank Math MCP Ability
+
+![WordPress](https://img.shields.io/badge/WordPress-7.0%2B-21759b)
+![PHP](https://img.shields.io/badge/PHP-8.0%2B-777bb4)
+![License](https://img.shields.io/badge/license-GPL--2.0--or--later-3da638)
+
+A WordPress plugin that exposes Rank Math SEO management to AI agents as **MCP tools**, built on the [WordPress Abilities API](https://developer.wordpress.org/apis/abilities-api/). It registers 24 abilities — per-post SEO metadata (core fields, social, schema), settings, redirections, 404 monitor, sitemap tools, module toggling and status — and marks them public so the [WordPress MCP Adapter](https://github.com/WordPress/mcp-adapter) surfaces them to AI clients such as Claude.
+
+The abilities also register on the core Abilities REST API (`/wp-json/wp-abilities/v1/`), so you can call them over plain HTTP with an application password.
+
+Rank Math ships its own native `rank-math/*` abilities once a site is connected to a Rank Math account, but that native set covers a different surface (mainly per-post SEO reads). This bridge works whether or not the site is connected, and additionally covers settings, redirections, the 404 monitor, the sitemap and module toggling — none of which the native abilities expose.
+
+Part of [wp-mcp-bridges](../README.md) — see that page for the project overview and the full list of bridges.
+
+## Requirements
+
+- **WordPress 7.0+** (the Abilities API ships from WordPress 6.9).
+- **PHP 8.0+**.
+- **Rank Math SEO** active.
+- To expose the abilities over MCP, the **WordPress MCP Adapter** plugin must be active. Abilities still register on the core Abilities API (and its REST endpoints) without it.
+
+## Installation
+
+1. Download `rank-math-mcp-ability.zip` from the [latest release](https://github.com/bucagdas/wp-mcp-bridges/releases?q=rank-math-mcp-ability).
+2. In wp-admin, go to **Plugins → Add New → Upload Plugin**, choose the ZIP, and install.
+3. Click **Activate**.
+
+After activating, confirm the abilities registered by visiting (authenticated):
+
+```
+https://example.com/wp-json/wp-abilities/v1/abilities?category=rank-math-mcp
+```
+
+### Updates
+
+This plugin checks for updates against a JSON file hosted in this repository, roughly every 12 hours, the same way any self-hosted WordPress plugin does — no account or token needed. Because that file is served through GitHub's raw-content CDN, a freshly published release can take a few minutes to become visible as an update in wp-admin.
+
+## Usage
+
+### Over MCP
+
+```json
+{
+  "ability_name": "rank-math-mcp/update-post-seo",
+  "parameters": {
+    "post_id": 42,
+    "title": "New SEO title",
+    "focus_keyword": "example keyword"
+  }
+}
+```
+
+### Over the REST API
+
+```bash
+curl -u 'USER:APP_PASSWORD' \
+  "https://example.com/wp-json/wp-abilities/v1/abilities/rank-math-mcp/get-status/run"
+```
+
+## Abilities
+
+| Ability | Type | Description |
+| --- | --- | --- |
+| `get-post-seo` / `update-post-seo` | read-only / write | Title, description, focus keyword, robots, canonical, breadcrumb title, pillar flag, SEO score. |
+| `update-post-social` | write | Open Graph and Twitter overrides. |
+| `update-post-schema` / `delete-post-schema` | write / destructive | Per-post schema blocks. |
+| `list-schema-posts` | read-only | Site-wide schema inventory. |
+| `list-posts-seo-status` | read-only | SEO field completeness across posts. |
+| `bulk-update-seo-meta` | destructive | Bulk field set. Supports `dry_run` and requires `confirm: true`. |
+| `get-settings` / `update-settings` | read-only / write | General/titles/sitemap/instant-indexing groups; sensitive keys stripped/refused. |
+| `get-status` | read-only | Version, module activation map, redirections/404/analytics presence, connection status. |
+| `toggle-module` | destructive | Activate/deactivate a module. Requires `confirm: true`. |
+| `list-redirections` / `get-redirection` / `create-redirection` / `update-redirection` / `delete-redirection` | mixed | Redirection CRUD. Delete requires `confirm: true`. |
+| `bulk-update-redirection-status` | destructive | Supports `dry_run` and requires `confirm: true`. |
+| `get-redirection-stats` | read-only | Counts by status, top hits. |
+| `list-404-logs` / `delete-404-log` / `clear-404-logs` | mixed | 404 monitor log inspection and cleanup. Requires `confirm: true`. |
+| `get-sitemap-status` / `clear-sitemap-cache` | read-only / write | Sitemap tools. |
+
+All writes read the value back after writing and return `{old, new}`. Destructive and bulk/toggle verbs require `confirm: true`; bulk verbs also support `dry_run: true`.
+
+## Tested versions
+
+- WordPress: 7.0
+- Rank Math SEO: 1.0.275
+- WordPress MCP Adapter: 0.5.0
+
+## License
+
+GPLv2 or later — see the [repository LICENSE](../LICENSE).
