@@ -343,7 +343,9 @@ class Terms {
 			$args['parent'] = (int) $input['parent'];
 		}
 
-		$result = wp_insert_term( (string) $input['name'], $taxonomy, $args );
+		// wp_insert_term()/wp_update_term() expect SLASHED data, same
+		// contract as wp_insert_post() — see abilities-posts.php's note.
+		$result = wp_insert_term( wp_slash( (string) $input['name'] ), $taxonomy, wp_slash( $args ) );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
@@ -381,7 +383,8 @@ class Terms {
 			return new \WP_Error( 'no_fields', __( 'Provide at least one field to change.', 'wp-core-mcp-ability' ) );
 		}
 
-		$result = wp_update_term( $id, $taxonomy, $args );
+		// See cb_create()'s identical wp_slash() note.
+		$result = wp_update_term( $id, $taxonomy, wp_slash( $args ) );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}

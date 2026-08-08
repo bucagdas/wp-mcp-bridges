@@ -313,7 +313,9 @@ class Users {
 			$args['role'] = (string) $input['role'];
 		}
 
-		$id = wp_insert_user( $args );
+		// wp_insert_user()/wp_update_user() expect SLASHED data, same
+		// contract as wp_insert_post() — see abilities-posts.php's note.
+		$id = wp_insert_user( wp_slash( $args ) );
 		if ( is_wp_error( $id ) ) {
 			return $id;
 		}
@@ -350,7 +352,8 @@ class Users {
 			return new \WP_Error( 'no_fields', __( 'Provide at least one field to change.', 'wp-core-mcp-ability' ) );
 		}
 
-		$result = wp_update_user( $args );
+		// See cb_create()'s identical wp_slash() note.
+		$result = wp_update_user( wp_slash( $args ) );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}

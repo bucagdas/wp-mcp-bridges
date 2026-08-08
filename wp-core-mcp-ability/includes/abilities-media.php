@@ -253,11 +253,14 @@ class Media {
 			'size'     => strlen( $content ),
 		);
 
+		// media_handle_sideload() -> wp_insert_attachment() -> wp_insert_post()
+		// expects SLASHED post_data, same contract as wp_insert_post() itself.
+		$title         = isset( $input['title'] ) ? (string) $input['title'] : pathinfo( $filename, PATHINFO_FILENAME );
 		$attachment_id = media_handle_sideload(
 			$file_array,
 			0,
-			isset( $input['title'] ) ? (string) $input['title'] : null,
-			array( 'post_title' => isset( $input['title'] ) ? (string) $input['title'] : pathinfo( $filename, PATHINFO_FILENAME ) )
+			wp_slash( $title ),
+			wp_slash( array( 'post_title' => $title ) )
 		);
 
 		if ( is_wp_error( $attachment_id ) ) {
@@ -268,7 +271,8 @@ class Media {
 		}
 
 		if ( ! empty( $input['alt_text'] ) ) {
-			update_post_meta( $attachment_id, '_wp_attachment_image_alt', sanitize_text_field( (string) $input['alt_text'] ) );
+			// update_post_meta() expects SLASHED data (see cb_create()'s note in abilities-posts.php).
+			update_post_meta( $attachment_id, '_wp_attachment_image_alt', wp_slash( sanitize_text_field( (string) $input['alt_text'] ) ) );
 		}
 
 		return array(

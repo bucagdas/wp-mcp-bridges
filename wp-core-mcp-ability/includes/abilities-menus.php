@@ -345,7 +345,9 @@ class Menus {
 	}
 
 	public static function cb_create_menu( $input ) {
-		$id = wp_update_nav_menu_object( 0, array( 'menu-name' => (string) $input['name'] ) );
+		// wp_update_nav_menu_object() expects SLASHED data, same contract
+		// as wp_insert_post() — see abilities-posts.php's note.
+		$id = wp_update_nav_menu_object( 0, wp_slash( array( 'menu-name' => (string) $input['name'] ) ) );
 		if ( is_wp_error( $id ) ) {
 			return $id;
 		}
@@ -412,7 +414,9 @@ class Menus {
 			}
 		}
 
-		$item_id = wp_update_nav_menu_item( $menu_id, 0, $args );
+		// wp_update_nav_menu_item() expects SLASHED data, same contract as
+		// wp_insert_post() — see abilities-posts.php's note.
+		$item_id = wp_update_nav_menu_item( $menu_id, 0, wp_slash( $args ) );
 		if ( is_wp_error( $item_id ) ) {
 			return $item_id;
 		}
@@ -488,7 +492,8 @@ class Menus {
 			return new \WP_Error( 'no_fields', __( 'Provide at least one field to change.', 'wp-core-mcp-ability' ) );
 		}
 
-		$result = wp_update_nav_menu_item( $menu_id, $id, $args );
+		// See cb_add_item()'s identical wp_slash() note.
+		$result = wp_update_nav_menu_item( $menu_id, $id, wp_slash( $args ) );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}

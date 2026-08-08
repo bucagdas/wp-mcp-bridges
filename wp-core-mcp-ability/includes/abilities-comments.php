@@ -274,7 +274,9 @@ class Comments {
 			'comment_approved'     => 'approve' === ( $input['status'] ?? 'hold' ) ? 1 : 0,
 		);
 
-		$id = wp_insert_comment( $args );
+		// wp_insert_comment() expects SLASHED data, same contract as
+		// wp_insert_post() — see abilities-posts.php's note.
+		$id = wp_insert_comment( wp_slash( $args ) );
 		if ( ! $id ) {
 			return new \WP_Error( 'create_failed', __( 'The comment could not be created.', 'wp-core-mcp-ability' ) );
 		}

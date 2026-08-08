@@ -3,7 +3,7 @@
  * Plugin Name: WP Core MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/wp-core-mcp-ability
  * Description: Full-coverage WordPress core abilities for MCP. Exposes WordPress's own native core/* abilities to MCP, plus generic options, posts, taxonomies/terms, comments and users CRUD.
- * Version: 1.3.1
+ * Version: 1.3.2
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas

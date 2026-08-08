@@ -611,7 +611,12 @@ class Posts {
 			$args['post_parent'] = (int) $input['parent'];
 		}
 
-		$id = wp_insert_post( $args, true );
+		// wp_insert_post()/wp_update_post() expect SLASHED data (the classic
+		// WP core "magic quotes" contract) — passing raw content strips any
+		// literal backslash they contain (e.g. `-` in Gutenberg block
+		// JSON attributes becomes `u002d`), corrupting block validation.
+		// Confirmed empirically 2026-08-08; see docs/KOPRU-EKSIKLERI.md.
+		$id = wp_insert_post( wp_slash( $args ), true );
 		if ( is_wp_error( $id ) ) {
 			return $id;
 		}
@@ -650,7 +655,8 @@ class Posts {
 			return new \WP_Error( 'no_fields', __( 'Provide at least one field to change.', 'wp-core-mcp-ability' ) );
 		}
 
-		$result = wp_update_post( $args, true );
+		// See cb_create()'s identical wp_slash() note.
+		$result = wp_update_post( wp_slash( $args ), true );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
@@ -770,7 +776,11 @@ class Posts {
 		if ( '' === $input['value'] ) {
 			delete_post_meta( $id, $key );
 		} else {
-			update_post_meta( $id, $key, $input['value'] );
+			// update_post_meta() expects SLASHED data, same as
+			// wp_insert_post()/wp_update_post() — see cb_create()'s note.
+			// wp_slash() recurses into arrays/objects, so this is correct
+			// whether value is a scalar or a structured value.
+			update_post_meta( $id, $key, wp_slash( $input['value'] ) );
 		}
 
 		return array(
@@ -1089,9 +1099,49 @@ class Posts {
 			return new \WP_Error( 'concurrent_modification', __( 'This post was modified by another request since it was read. Nothing was written — re-run dry_run: true and retry.', 'wp-core-mcp-ability' ) );
 		}
 
-		$result = wp_update_post( array( 'ID' => $id, $post_key => $new_value ), true );
+		// wp_update_post() expects SLASHED data — passing $new_value raw
+		// let WordPress's own unslash step strip every literal backslash
+		// in the field, not just inside the matched span (e.g. `-` in
+		// Gutenberg block JSON attributes becomes `u002d`, breaking block
+		// validation and producing invalid CSS var() values on the front
+		// end). Confirmed empirically 2026-08-08; see docs/KOPRU-EKSIKLERI.md.
+		$result = wp_update_post( wp_slash( array( 'ID' => $id, $post_key => $new_value ) ), true );
 		if ( is_wp_error( $result ) ) {
 			return $result;
+		}
+
+		// Post-write verification: the pre-write verify_integrity() call
+		// above only proves apply_matches()'s own string manipulation left
+		// the untouched spans alone — it says nothing about what actually
+		// landed in the database (which is exactly how the missing-slash
+		// bug above went undetected: old_hash/new_hash were computed from
+		// $current/$new_value, never from what was actually persisted, so
+		// integrity_verified: true kept reporting success on a corrupted
+		// write). Read the real row back directly ($wpdb, bypassing the
+		// process-local object cache for the same reason the write lock
+		// above does) and compare it byte-for-byte to what was intended.
+		global $wpdb;
+		$column = array(
+			'post_title'   => 'post_title',
+			'post_content' => 'post_content',
+			'post_excerpt' => 'post_excerpt',
+		)[ $post_key ];
+		$actual = $wpdb->get_var( $wpdb->prepare( "SELECT {$column} FROM {$wpdb->posts} WHERE ID = %d", $id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$integrity_verified = ( null !== $actual && hash( 'sha256', $actual ) === hash( 'sha256', $new_value ) );
+
+		if ( ! $integrity_verified ) {
+			return new \WP_Error(
+				'write_not_verified',
+				__( 'The write completed, but the content actually saved does not match what was intended — something (a WordPress or plugin filter, or an unslashing edge case) altered it in transit. The post has already been changed; inspect it directly before writing again.', 'wp-core-mcp-ability' ),
+				array(
+					'id'         => $id,
+					'field'      => $field,
+					'expected'   => $new_value,
+					'actual'     => $actual,
+					'old_hash'   => hash( 'sha256', $current ),
+					'new_hash'   => hash( 'sha256', (string) $actual ),
+				)
+			);
 		}
 
 		return array(
@@ -1101,7 +1151,7 @@ class Posts {
 			'new_length'         => strlen( $new_value ),
 			'bytes_changed'      => strlen( $new_value ) - strlen( $current ),
 			'old_hash'           => hash( 'sha256', $current ),
-			'new_hash'           => hash( 'sha256', $new_value ),
+			'new_hash'           => hash( 'sha256', $actual ),
 			'integrity_verified' => true,
 			'replaced_count'     => count( $target ),
 		);
