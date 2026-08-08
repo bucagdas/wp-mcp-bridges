@@ -1,0 +1,16 @@
+{
+    "name": "GeneratePress MCP Ability",
+    "slug": "generatepress-mcp-ability",
+    "version": "1.3.1",
+    "author": "bucagdas",
+    "homepage": "https://github.com/bucagdas/wp-mcp-bridges/tree/main/generatepress-mcp-ability",
+    "requires": "7.0",
+    "tested": "7.0",
+    "requires_php": "8.0",
+    "download_url": "https://github.com/bucagdas/wp-mcp-bridges/releases/download/generatepress-mcp-ability-v1.3.1/generatepress-mcp-ability.zip",
+    "last_updated": "2026-08-08 08:53:21",
+    "sections": {
+        "description": "GeneratePress ecosystem abilities for MCP. Theme settings, GP Premium module status, GP Elements (full CRUD), GenerateBlocks settings, global styles (full CRUD) and Pro pattern libraries. Components are detected at runtime; abilities of missing components are simply not registered.",
+        "changelog": "<h4>1.3.1</h4><ul><li>Initial public release: 39 abilities covering theme settings, theme mods, GP Premium module status, GP Elements CRUD, GenerateBlocks settings, global styles CRUD and pattern libraries.</li></ul>"
+    }
+}
