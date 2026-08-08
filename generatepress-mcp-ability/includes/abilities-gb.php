@@ -68,7 +68,7 @@ class GB {
 				'generatepress-mcp/create-gb-global-style',
 				array(
 					'label'               => __( 'Create a GenerateBlocks global style', 'generatepress-mcp-ability' ),
-					'description'         => __( 'Creates a new GenerateBlocks Pro global style: a gblocks_global_style post plus its matching entries in the generateblocks_global_styles (compiled) and generateblocks_global_style_attrs (editor attributes) options — both are written together so they stay in sync. content is block markup and is validated the same way as create-gp-element (block-parse + wp_kses_post integrity). attrs is a free-form JSON object (GB Pro\'s own editor writes it); it must be a JSON object and, if not empty, is expected to at least be an object keyed by attribute name — not a list or scalar. NOTE: the underlying gblocks_global_style post type is deprecated and only registered by GenerateBlocks Pro on demand; if it is not currently registered, this ability re-registers it for the request so creation can proceed. Set dry_run: true to validate without creating anything.', 'generatepress-mcp-ability' ),
+					'description'         => __( 'Creates a new GenerateBlocks Pro global style: a gblocks_global_style post plus its matching entries in the generateblocks_global_styles (compiled) and generateblocks_global_style_attrs (editor attributes) options — both are written together so they stay in sync. content is block markup and is validated the same way as create-gp-element (kses against a safe whitelist). attrs is a free-form JSON object (GB Pro\'s own editor writes it); it must be a JSON object and, if not empty, is expected to at least be an object keyed by attribute name — not a list or scalar. NOTE: the underlying gblocks_global_style post type is deprecated and only registered by GenerateBlocks Pro on demand; if it is not currently registered, this ability re-registers it for the request so creation can proceed. Set dry_run: true to validate without creating anything: on dry_run, invalid content/attrs never errors, it returns {dry_run:true, valid:false, reason} naming exactly what would change. New styles default to status "draft"; creating directly with status "publish" additionally requires the publish_posts capability.', 'generatepress-mcp-ability' ),
 					'category'            => Plugin::CATEGORY,
 					'input_schema'        => array(
 						'type'                 => 'object',
@@ -104,7 +104,7 @@ class GB {
 						'description' => 'The created global style (or, when dry_run, {dry_run:true, valid:true}).',
 					),
 					'execute_callback'    => array( __CLASS__, 'cb_create_gb_global_style' ),
-					'permission_callback' => array( Plugin::class, 'permission_theme_options' ),
+					'permission_callback' => array( Plugin::class, 'permission_gb_style_create' ),
 					'meta'                => Plugin::meta( false, false, false ),
 				)
 			);
@@ -113,7 +113,7 @@ class GB {
 				'generatepress-mcp/update-gb-global-style',
 				array(
 					'label'               => __( 'Update a GenerateBlocks global style', 'generatepress-mcp-ability' ),
-					'description'         => __( 'Updates the content and/or attrs of an existing GenerateBlocks Pro global style, keeping the post content and the generateblocks_global_styles / generateblocks_global_style_attrs options in sync (never updates one without the other when both are provided). content is validated the same way as create-gb-global-style. At least one of title, content, attrs is required. No confirm gate — every call reads back and returns {old,new} so the effect is always visible. Set dry_run: true to validate without saving.', 'generatepress-mcp-ability' ),
+					'description'         => __( 'Updates the content and/or attrs of an existing GenerateBlocks Pro global style, keeping the post content and the generateblocks_global_styles / generateblocks_global_style_attrs options in sync (never updates one without the other when both are provided). content is validated the same way as create-gb-global-style: on dry_run, invalid content never errors, it returns {dry_run:true, valid:false, reason} naming exactly what would change. At least one of title, content, attrs is required. No confirm gate — every call reads back and returns {old,new} so the effect is always visible.', 'generatepress-mcp-ability' ),
 					'category'            => Plugin::CATEGORY,
 					'input_schema'        => array(
 						'type'                 => 'object',
@@ -149,7 +149,7 @@ class GB {
 				'generatepress-mcp/update-gb-global-style-status',
 				array(
 					'label'               => __( 'Update GenerateBlocks global style status', 'generatepress-mcp-ability' ),
-					'description'         => __( 'Publishes or drafts one GenerateBlocks Pro global style. Returns the old and new status, read back after the write.', 'generatepress-mcp-ability' ),
+					'description'         => __( 'Publishes or drafts one GenerateBlocks Pro global style. Publishing additionally requires the publish_post capability for this post (this ability detects a silent downgrade and returns an error naming the missing capability instead, rather than reporting success). Returns the old and new status, read back after the write.', 'generatepress-mcp-ability' ),
 					'category'            => Plugin::CATEGORY,
 					'input_schema'        => array(
 						'type'                 => 'object',
@@ -173,7 +173,7 @@ class GB {
 						'description' => 'Object with "style_id", "old" and "new" (statuses).',
 					),
 					'execute_callback'    => array( __CLASS__, 'cb_update_gb_global_style_status' ),
-					'permission_callback' => array( Plugin::class, 'permission_gb_style_edit' ),
+					'permission_callback' => array( Plugin::class, 'permission_gb_style_publish' ),
 					'meta'                => Plugin::meta( false, false, true ),
 				)
 			);
@@ -686,10 +686,24 @@ class GB {
 		$content = isset( $input['content'] ) ? (string) $input['content'] : '';
 		$valid   = Plugin::validate_block_markup( $content );
 		if ( is_wp_error( $valid ) ) {
+			if ( ! empty( $input['dry_run'] ) ) {
+				return array(
+					'dry_run' => true,
+					'valid'   => false,
+					'reason'  => $valid->get_error_message(),
+				);
+			}
 			return $valid;
 		}
 		$attrs_valid = self::validate_style_attrs( $input['attrs'] ?? null );
 		if ( is_wp_error( $attrs_valid ) ) {
+			if ( ! empty( $input['dry_run'] ) ) {
+				return array(
+					'dry_run' => true,
+					'valid'   => false,
+					'reason'  => $attrs_valid->get_error_message(),
+				);
+			}
 			return $attrs_valid;
 		}
 
@@ -702,13 +716,19 @@ class GB {
 
 		self::ensure_global_style_cpt();
 
+		// wp_insert_post() expects SLASHED data (see abilities-gp.php's
+		// write_element_content() note) — wp_slash() here operates on the
+		// array literal, not on $content itself, so the raw $content below
+		// (destined for update_option(), which must NOT be pre-slashed —
+		// verified empirically 2026-08-08, options are stored as-is) stays
+		// untouched.
 		$post_id = wp_insert_post(
-			array(
+			wp_slash( array(
 				'post_type'    => 'gblocks_global_style',
 				'post_title'   => isset( $input['title'] ) ? (string) $input['title'] : __( '(no title)', 'generatepress-mcp-ability' ),
 				'post_content' => $content,
 				'post_status'  => isset( $input['status'] ) ? (string) $input['status'] : 'draft',
-			),
+			) ),
 			true
 		);
 		if ( is_wp_error( $post_id ) ) {
@@ -739,12 +759,26 @@ class GB {
 		if ( isset( $input['content'] ) ) {
 			$valid = Plugin::validate_block_markup( (string) $input['content'] );
 			if ( is_wp_error( $valid ) ) {
+				if ( ! empty( $input['dry_run'] ) ) {
+					return array(
+						'dry_run' => true,
+						'valid'   => false,
+						'reason'  => $valid->get_error_message(),
+					);
+				}
 				return $valid;
 			}
 		}
 		if ( array_key_exists( 'attrs', $input ) ) {
 			$attrs_valid = self::validate_style_attrs( $input['attrs'] );
 			if ( is_wp_error( $attrs_valid ) ) {
+				if ( ! empty( $input['dry_run'] ) ) {
+					return array(
+						'dry_run' => true,
+						'valid'   => false,
+						'reason'  => $attrs_valid->get_error_message(),
+					);
+				}
 				return $attrs_valid;
 			}
 		}
@@ -774,15 +808,18 @@ class GB {
 			$old_attrs    = $attrs_opt[ $post->ID ] ?? null;
 		}
 
+		// wp_update_post() expects SLASHED data (see abilities-gp.php's
+		// write_element_content() note); the update_option() calls below
+		// must stay unslashed (see cb_create_gb_global_style()'s note).
 		if ( isset( $input['title'] ) ) {
 			$old = $post->post_title;
-			wp_update_post( array( 'ID' => $post->ID, 'post_title' => (string) $input['title'] ), true );
+			wp_update_post( wp_slash( array( 'ID' => $post->ID, 'post_title' => (string) $input['title'] ) ), true );
 			$updated['title'] = array( 'old' => $old, 'new' => get_the_title( $post->ID ) );
 		}
 
 		if ( isset( $input['content'] ) ) {
 			$old = $post->post_content;
-			wp_update_post( array( 'ID' => $post->ID, 'post_content' => (string) $input['content'] ), true );
+			wp_update_post( wp_slash( array( 'ID' => $post->ID, 'post_content' => (string) $input['content'] ) ), true );
 
 			$compiled                         = get_option( 'generateblocks_global_styles', array() );
 			$compiled[ $post->ID ]['content'] = (string) $input['content'];
@@ -815,22 +852,39 @@ class GB {
 			return $post;
 		}
 
-		$old    = $post->post_status;
-		$result = wp_update_post(
-			array(
+		$old       = $post->post_status;
+		$requested = (string) $input['status'];
+		$result    = wp_update_post(
+			wp_slash( array(
 				'ID'          => $post->ID,
-				'post_status' => (string) $input['status'],
-			),
+				'post_status' => $requested,
+			) ),
 			true
 		);
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
 
+		$new = get_post_status( $post->ID );
+		// See cb_update_gp_element_status()'s identical fallback: permission_gb_style_publish()
+		// should already catch a missing publish_post capability, but wp_update_post()
+		// itself never enforces it, so name the mismatch explicitly if it ever gets here.
+		if ( 'publish' === $requested && 'publish' !== $new ) {
+			return new \WP_Error(
+				'status_not_applied',
+				sprintf(
+					/* translators: 1: requested status, 2: actual resulting status */
+					__( 'Requested status "%1$s" but the style was saved as "%2$s" instead. The acting user likely lacks the publish_post capability for this style.', 'generatepress-mcp-ability' ),
+					$requested,
+					$new
+				)
+			);
+		}
+
 		return array(
 			'style_id' => (int) $post->ID,
 			'old'      => $old,
-			'new'      => get_post_status( $post->ID ),
+			'new'      => $new,
 		);
 	}
 

@@ -3,7 +3,7 @@
  * Plugin Name: GeneratePress MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/generatepress-mcp-ability
  * Description: GeneratePress ecosystem abilities for MCP. Theme settings, GP Premium module status, GP Elements (full CRUD), GenerateBlocks settings, global styles (full CRUD) and Pro pattern libraries. Components are detected at runtime; abilities of missing components are simply not registered.
- * Version: 1.3.1
+ * Version: 1.3.3
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -376,9 +376,67 @@ class Plugin {
 		return true;
 	}
 
+	/**
+	 * create-gp-element accepts status: "publish" at creation time, before
+	 * any post ID exists — so this checks the site-wide publish_posts
+	 * capability rather than the per-post publish_post meta cap
+	 * permission_gp_element_publish() uses. Found missing entirely during
+	 * the v1.3.1 fix's re-verification (2026-08-08): wp_insert_post()
+	 * does not enforce object capabilities on its own — the "silently
+	 * downgraded to pending" behavior documented on the dedicated
+	 * update-gp-element-status path is specific to wp-admin's classic
+	 * post-editing form handler (_wp_translate_postdata()), not something
+	 * wp_insert_post()/wp_update_post() do when called programmatically.
+	 * Without this check, any caller who could create elements at all
+	 * could create them pre-published regardless of publish_posts.
+	 */
+	public static function permission_gp_element_create( $input = null ): bool {
+		if ( ! self::permission_gp_elements() ) {
+			return false;
+		}
+		if ( isset( $input['status'] ) && 'publish' === $input['status'] ) {
+			return current_user_can( 'publish_posts' );
+		}
+		return true;
+	}
+
 	public static function permission_gb_style_edit( $input = null ): bool {
 		$id = isset( $input['style_id'] ) ? (int) $input['style_id'] : 0;
 		return current_user_can( 'edit_theme_options' ) && $id > 0 && current_user_can( 'edit_post', $id );
+	}
+
+	/**
+	 * Same gap as permission_gp_element_publish() (see that docblock),
+	 * found and fixed alongside it (2026-08-08): the dedicated
+	 * update-gb-global-style-status ability had no explicit publish
+	 * capability check at all — permission_gb_style_edit() only checks
+	 * edit_theme_options + edit_post, neither of which implies
+	 * publish_posts, and wp_update_post() does not enforce it on its own.
+	 */
+	public static function permission_gb_style_publish( $input = null ): bool {
+		$id = isset( $input['style_id'] ) ? (int) $input['style_id'] : 0;
+		if ( ! current_user_can( 'edit_theme_options' ) || $id <= 0 || ! current_user_can( 'edit_post', $id ) ) {
+			return false;
+		}
+		if ( isset( $input['status'] ) && 'publish' === $input['status'] ) {
+			return current_user_can( 'publish_post', $id );
+		}
+		return true;
+	}
+
+	/**
+	 * create-gb-global-style accepts status: "publish" at creation time,
+	 * before any post ID exists — same gap and same fix shape as
+	 * permission_gp_element_create() (see that docblock).
+	 */
+	public static function permission_gb_style_create( $input = null ): bool {
+		if ( ! current_user_can( 'edit_theme_options' ) ) {
+			return false;
+		}
+		if ( isset( $input['status'] ) && 'publish' === $input['status'] ) {
+			return current_user_can( 'publish_posts' );
+		}
+		return true;
 	}
 
 	public static function permission_gb_style_delete( $input = null ): bool {
@@ -444,50 +502,109 @@ class Plugin {
 	}
 
 	/**
-	 * Best-effort human-readable summary of what sanitization changed,
-	 * so dry_run/validation errors say WHAT was stripped/altered instead of
-	 * just before/after lengths.
+	 * Extracts each opening/self-closing tag's name and attribute NAMES
+	 * (not values) in document order. Regex-based, not a real parser —
+	 * matches wp_kses()'s own approach and is only used for diffing, never
+	 * for what gets saved.
+	 */
+	private static function extract_tag_attrs( string $html ): array {
+		preg_match_all(
+			'/<([a-zA-Z][a-zA-Z0-9-]*)((?:\s+[a-zA-Z][a-zA-Z0-9:_-]*(?:\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s\/>]+))?)*)\s*\/?>/',
+			$html,
+			$matches,
+			PREG_SET_ORDER
+		);
+		$out = array();
+		foreach ( $matches as $m ) {
+			preg_match_all( '/([a-zA-Z][a-zA-Z0-9:_-]*)\s*(?:=|$)/', $m[2], $attr_matches );
+			$out[] = array(
+				'tag'   => strtolower( $m[1] ),
+				'attrs' => array_map( 'strtolower', $attr_matches[1] ),
+			);
+		}
+		return $out;
+	}
+
+	/**
+	 * Best-effort human-readable summary of what sanitization changed, so
+	 * dry_run/validation errors say WHAT was stripped/altered — which
+	 * tag(s), which attribute(s) on which tag, which character — instead
+	 * of just before/after lengths or a raw byte offset. A found-in-the-
+	 * field gap: the original version only detected whole tags dropped and
+	 * fell back to a raw byte diff otherwise, which mostly just reported
+	 * wp_kses()'s own harmless tag/attribute-name lowercasing (e.g.
+	 * viewBox -> viewbox) as the "difference", burying the actual dropped
+	 * attribute (e.g. onclick) that mattered.
 	 */
 	public static function diff_summary( string $before, string $after ): string {
 		if ( trim( $before ) === trim( $after ) ) {
 			return '';
 		}
 
-		// Tags present before but entirely absent after => likely stripped.
-		preg_match_all( '/<([a-z][a-z0-9-]*)\b/i', $before, $before_tags );
-		preg_match_all( '/<([a-z][a-z0-9-]*)\b/i', $after, $after_tags );
-		$before_counts = array_count_values( array_map( 'strtolower', $before_tags[1] ) );
-		$after_counts  = array_count_values( array_map( 'strtolower', $after_tags[1] ) );
-		$dropped_tags  = array();
-		foreach ( $before_counts as $tag => $count ) {
-			$remaining = $after_counts[ $tag ] ?? 0;
-			if ( $remaining < $count ) {
-				$dropped_tags[] = $count - $remaining === $count
-					? $tag
-					: sprintf( '%s (%d of %d)', $tag, $count - $remaining, $count );
+		$before_tags = self::extract_tag_attrs( $before );
+		$after_tags  = self::extract_tag_attrs( $after );
+
+		// Group $after's tags by name so each $before tag occurrence can be
+		// matched against the same-name, same-occurrence-index tag in
+		// $after — keeps a dropped tag from misaligning every comparison
+		// that follows it.
+		$after_by_tag = array();
+		foreach ( $after_tags as $t ) {
+			$after_by_tag[ $t['tag'] ][] = $t['attrs'];
+		}
+
+		$notes               = array();
+		$occurrence_index    = array();
+		$dropped_tag_counts  = array();
+		foreach ( $before_tags as $t ) {
+			$tag = $t['tag'];
+			$idx = $occurrence_index[ $tag ] ?? 0;
+			$occurrence_index[ $tag ] = $idx + 1;
+
+			if ( ! isset( $after_by_tag[ $tag ][ $idx ] ) ) {
+				$dropped_tag_counts[ $tag ] = ( $dropped_tag_counts[ $tag ] ?? 0 ) + 1;
+				continue;
+			}
+
+			$dropped_attrs = array_values( array_diff( $t['attrs'], $after_by_tag[ $tag ][ $idx ] ) );
+			if ( ! empty( $dropped_attrs ) ) {
+				$notes[] = sprintf(
+					'On <%1$s>: dropped attribute(s) %2$s.',
+					$tag,
+					implode( ', ', $dropped_attrs )
+				);
 			}
 		}
-
-		$notes = array();
-		if ( ! empty( $dropped_tags ) ) {
-			$notes[] = sprintf( 'Dropped/removed tag(s): %s.', implode( ', ', $dropped_tags ) );
+		foreach ( $dropped_tag_counts as $tag => $count ) {
+			$notes[] = sprintf( 'Dropped %1$d <%2$s> tag(s) entirely.', $count, $tag );
 		}
 
-		// Character-level diff for the common case where only entities/quotes
-		// changed (e.g. an apostrophe inside an attribute became &#8217; or
-		// &#039;) and no tag was dropped at all.
-		if ( empty( $dropped_tags ) ) {
-			$max = 4000;
-			for ( $i = 0, $len = min( strlen( $before ), strlen( $after ), $max ); $i < $len; $i++ ) {
-				if ( $before[ $i ] !== $after[ $i ] ) {
+		// Fall back to a character diff only when nothing tag/attribute-
+		// level explains the difference (e.g. an apostrophe inside an
+		// attribute value became &#8217; or &#039;). Both sides are
+		// name-case-normalized first so kses's harmless tag/attribute-name
+		// lowercasing never masks the real difference underneath it.
+		if ( empty( $notes ) ) {
+			$norm_before = self::lowercase_tag_attr_names( $before );
+			$norm_after  = self::lowercase_tag_attr_names( $after );
+			$max         = 4000;
+			for ( $i = 0, $len = min( strlen( $norm_before ), strlen( $norm_after ), $max ); $i < $len; $i++ ) {
+				if ( $norm_before[ $i ] !== $norm_after[ $i ] ) {
 					$notes[] = sprintf(
-						'First difference near byte %1$d: "%2$s" became "%3$s".',
+						'First character difference near byte %1$d: "%2$s" became "%3$s".',
 						$i,
-						substr( $before, max( 0, $i - 15 ), 30 ),
-						substr( $after, max( 0, $i - 15 ), 30 )
+						substr( $norm_before, max( 0, $i - 15 ), 30 ),
+						substr( $norm_after, max( 0, $i - 15 ), 30 )
 					);
 					break;
 				}
+			}
+			if ( empty( $notes ) && strlen( $norm_before ) !== strlen( $norm_after ) ) {
+				$notes[] = sprintf(
+					'Length differs (%1$d vs %2$d bytes) with no byte-level difference in the shared prefix — likely trailing content removed.',
+					strlen( $norm_before ),
+					strlen( $norm_after )
+				);
 			}
 		}
 

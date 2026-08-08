@@ -260,7 +260,7 @@ class GP {
 				'generatepress-mcp/create-gp-element',
 				array(
 					'label'               => __( 'Create a GP Element', 'generatepress-mcp-ability' ),
-					'description'         => __( 'Creates a new GP Premium Element. type is required (hook, layout, header or block); title and content are recommended. For type "hook", hook_name is required and hook_priority is optional (default 10); display_conditions defaults to the entire site if omitted, since an element with no display rule never renders anywhere. Content is validated before saving: block-comment markup must parse as valid blocks. If the acting user has unfiltered_html, raw content is accepted as-is (same as wp-admin); otherwise it must pass kses (extended with a safe inline-SVG tag/attribute whitelist — script/foreignObject/event-handler attributes stay rejected) unchanged, and any diff is reported. Set dry_run: true to run validation only, without creating anything. New elements default to status "draft". Never sets the PHP-execution hook flag — that remains a wp-admin-only, code-writing operation outside this bridge\'s scope.', 'generatepress-mcp-ability' ),
+					'description'         => __( 'Creates a new GP Premium Element. type is required (hook, layout, header or block); title and content are recommended. For type "hook", hook_name is required and hook_priority is optional (default 10); display_conditions defaults to the entire site if omitted, since an element with no display rule never renders anywhere. Content is validated before saving: block-comment markup must parse as valid blocks. If the acting user has unfiltered_html, raw content is accepted as-is (same as wp-admin); otherwise it must pass kses (extended with a safe inline-SVG tag/attribute whitelist — script/foreignObject/event-handler attributes stay rejected). Set dry_run: true to run validation only, without creating anything: on dry_run, invalid content never errors — it returns {dry_run:true, valid:false, reason} where reason names exactly what sanitization would change (which tag(s) were dropped entirely, which attribute(s) were dropped from which tag, or the first differing character), not just "content changed". A real (non-dry_run) write with invalid content still fails with that same detail in the error message. New elements default to status "draft"; creating directly with status "publish" additionally requires the publish_posts capability (checked before creation — gp_elements has no post ID yet at this point, so this is the site-wide capability rather than the per-post one update-gp-element-status uses). Never sets the PHP-execution hook flag — that remains a wp-admin-only, code-writing operation outside this bridge\'s scope.', 'generatepress-mcp-ability' ),
 					'category'            => Plugin::CATEGORY,
 					'input_schema'        => array(
 						'type'                 => 'object',
@@ -323,7 +323,7 @@ class GP {
 						'description' => 'The created element (or, when dry_run, {dry_run:true, valid:true}).',
 					),
 					'execute_callback'    => array( __CLASS__, 'cb_create_gp_element' ),
-					'permission_callback' => array( Plugin::class, 'permission_gp_elements' ),
+					'permission_callback' => array( Plugin::class, 'permission_gp_element_create' ),
 					'meta'                => Plugin::meta( false, false, false ),
 				)
 			);
@@ -332,7 +332,7 @@ class GP {
 				'generatepress-mcp/update-gp-element',
 				array(
 					'label'               => __( 'Update a GP Element', 'generatepress-mcp-ability' ),
-					'description'         => __( 'Updates one or more fields of an existing GP Element: title, content, hook_name, hook_priority, display/exclude/user conditions, internal_notes. At least one field is required. Content is validated the same way as create-gp-element (block-parse + wp_kses_post integrity); set dry_run: true to validate without saving. This can overwrite an element\'s working configuration, so no confirm gate — instead every call reads back and returns {old,new} per changed field so the effect is always visible. Never touches the PHP-execution hook flag.', 'generatepress-mcp-ability' ),
+					'description'         => __( 'Updates one or more fields of an existing GP Element: title, content, hook_name, hook_priority, display/exclude/user conditions, internal_notes. At least one field is required. Content is validated the same way as create-gp-element (kses against a safe whitelist, unfiltered_html accounts bypass it); set dry_run: true to validate without saving — on dry_run, invalid content never errors, it returns {dry_run:true, valid:false, reason} naming exactly what would change (dropped tag(s)/attribute(s), or the first differing character). This can overwrite an element\'s working configuration, so no confirm gate — instead every call reads back and returns {old,new} per changed field so the effect is always visible. Never touches the PHP-execution hook flag.', 'generatepress-mcp-ability' ),
 					'category'            => Plugin::CATEGORY,
 					'input_schema'        => array(
 						'type'                 => 'object',
@@ -609,15 +609,22 @@ class GP {
 	 * other one so a stale copy never lingers in two places.
 	 */
 	private static function write_element_content( int $post_id, string $type, string $content ): void {
+		// update_post_meta()/wp_update_post() both expect SLASHED data (the
+		// classic WP core "magic quotes" contract) — passing raw content
+		// let WordPress's own unslash step strip every literal backslash
+		// the content contains, not just wherever a caller might expect
+		// escaping (e.g. `-` in Gutenberg block JSON attributes becomes
+		// `u002d`, breaking block validation). Confirmed empirically
+		// 2026-08-08; see docs/KOPRU-EKSIKLERI.md.
 		if ( self::uses_content_meta( $type ) ) {
 			if ( '' !== $content ) {
-				update_post_meta( $post_id, '_generate_element_content', $content );
+				update_post_meta( $post_id, '_generate_element_content', wp_slash( $content ) );
 			} else {
 				delete_post_meta( $post_id, '_generate_element_content' );
 			}
 			wp_update_post( array( 'ID' => $post_id, 'post_content' => '' ), true );
 		} else {
-			wp_update_post( array( 'ID' => $post_id, 'post_content' => $content ), true );
+			wp_update_post( wp_slash( array( 'ID' => $post_id, 'post_content' => $content ) ), true );
 			delete_post_meta( $post_id, '_generate_element_content' );
 		}
 	}
@@ -672,10 +679,10 @@ class GP {
 		$old            = $post->post_status;
 		$requested      = (string) $input['status'];
 		$result         = wp_update_post(
-			array(
+			wp_slash( array(
 				'ID'          => $post->ID,
 				'post_status' => $requested,
-			),
+			) ),
 			true
 		);
 		if ( is_wp_error( $result ) ) {
@@ -749,6 +756,13 @@ class GP {
 		$content = isset( $input['content'] ) ? (string) $input['content'] : '';
 		$valid   = Plugin::validate_block_markup( $content );
 		if ( is_wp_error( $valid ) ) {
+			if ( ! empty( $input['dry_run'] ) ) {
+				return array(
+					'dry_run' => true,
+					'valid'   => false,
+					'reason'  => $valid->get_error_message(),
+				);
+			}
 			return $valid;
 		}
 
@@ -759,12 +773,14 @@ class GP {
 			);
 		}
 
+		// wp_insert_post()/update_post_meta() expect SLASHED data — see
+		// write_element_content()'s note above.
 		$post_id = wp_insert_post(
-			array(
+			wp_slash( array(
 				'post_type'   => 'gp_elements',
 				'post_title'  => isset( $input['title'] ) ? (string) $input['title'] : __( '(no title)', 'generatepress-mcp-ability' ),
 				'post_status' => isset( $input['status'] ) ? (string) $input['status'] : 'draft',
-			),
+			) ),
 			true
 		);
 		if ( is_wp_error( $post_id ) ) {
@@ -774,7 +790,7 @@ class GP {
 		update_post_meta( $post_id, '_generate_element_type', $type );
 		self::write_element_content( $post_id, $type, $content );
 		if ( 'hook' === $type ) {
-			update_post_meta( $post_id, '_generate_hook', (string) $input['hook_name'] );
+			update_post_meta( $post_id, '_generate_hook', wp_slash( (string) $input['hook_name'] ) );
 			update_post_meta( $post_id, '_generate_hook_priority', isset( $input['hook_priority'] ) ? (int) $input['hook_priority'] : 10 );
 		}
 		foreach ( array(
@@ -783,14 +799,14 @@ class GP {
 			'user_conditions'    => '_generate_element_user_conditions',
 		) as $in_key => $meta_key ) {
 			if ( isset( $input[ $in_key ] ) ) {
-				update_post_meta( $post_id, $meta_key, (array) $input[ $in_key ] );
+				update_post_meta( $post_id, $meta_key, wp_slash( (array) $input[ $in_key ] ) );
 			}
 		}
 		if ( ! isset( $input['display_conditions'] ) && self::needs_display_conditions( $type ) ) {
 			update_post_meta( $post_id, '_generate_element_display_conditions', self::DEFAULT_DISPLAY_CONDITIONS );
 		}
 		if ( isset( $input['internal_notes'] ) ) {
-			update_post_meta( $post_id, '_generate_element_internal_notes', sanitize_textarea_field( (string) $input['internal_notes'] ) );
+			update_post_meta( $post_id, '_generate_element_internal_notes', wp_slash( sanitize_textarea_field( (string) $input['internal_notes'] ) ) );
 		}
 
 		return self::cb_get_gp_element( array( 'element_id' => $post_id ) );
@@ -807,6 +823,13 @@ class GP {
 		if ( isset( $input['content'] ) ) {
 			$valid = Plugin::validate_block_markup( (string) $input['content'] );
 			if ( is_wp_error( $valid ) ) {
+				if ( ! empty( $input['dry_run'] ) ) {
+					return array(
+						'dry_run' => true,
+						'valid'   => false,
+						'reason'  => $valid->get_error_message(),
+					);
+				}
 				return $valid;
 			}
 		}
@@ -820,9 +843,11 @@ class GP {
 
 		$updated = array();
 
+		// wp_update_post()/update_post_meta() expect SLASHED data — see
+		// write_element_content()'s note above.
 		if ( isset( $input['title'] ) ) {
 			$old = $post->post_title;
-			wp_update_post( array( 'ID' => $post->ID, 'post_title' => (string) $input['title'] ), true );
+			wp_update_post( wp_slash( array( 'ID' => $post->ID, 'post_title' => (string) $input['title'] ) ), true );
 			$updated['title'] = array( 'old' => $old, 'new' => get_the_title( $post->ID ) );
 		}
 		if ( isset( $input['content'] ) ) {
@@ -832,7 +857,7 @@ class GP {
 		}
 		if ( isset( $input['hook_name'] ) ) {
 			$old = get_post_meta( $post->ID, '_generate_hook', true );
-			update_post_meta( $post->ID, '_generate_hook', (string) $input['hook_name'] );
+			update_post_meta( $post->ID, '_generate_hook', wp_slash( (string) $input['hook_name'] ) );
 			$updated['hook_name'] = array( 'old' => $old, 'new' => get_post_meta( $post->ID, '_generate_hook', true ) );
 		}
 		if ( isset( $input['hook_priority'] ) ) {
@@ -847,7 +872,7 @@ class GP {
 		) as $in_key => $meta_key ) {
 			if ( isset( $input[ $in_key ] ) ) {
 				$old = get_post_meta( $post->ID, $meta_key, true );
-				update_post_meta( $post->ID, $meta_key, (array) $input[ $in_key ] );
+				update_post_meta( $post->ID, $meta_key, wp_slash( (array) $input[ $in_key ] ) );
 				$updated[ $in_key ] = array( 'old' => $old, 'new' => get_post_meta( $post->ID, $meta_key, true ) );
 			}
 		}
@@ -863,7 +888,7 @@ class GP {
 		if ( isset( $input['internal_notes'] ) ) {
 			$old   = get_post_meta( $post->ID, '_generate_element_internal_notes', true );
 			$clean = sanitize_textarea_field( (string) $input['internal_notes'] );
-			update_post_meta( $post->ID, '_generate_element_internal_notes', $clean );
+			update_post_meta( $post->ID, '_generate_element_internal_notes', wp_slash( $clean ) );
 			$updated['internal_notes'] = array( 'old' => $old, 'new' => get_post_meta( $post->ID, '_generate_element_internal_notes', true ) );
 		}
 

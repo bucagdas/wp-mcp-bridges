@@ -705,7 +705,9 @@ class Theme {
 			if ( '' === $value ) {
 				delete_post_meta( $post_id, $meta_key );
 			} else {
-				update_post_meta( $post_id, $meta_key, $value );
+				// update_post_meta() expects SLASHED data — see
+				// abilities-gp.php's write_element_content() note.
+				update_post_meta( $post_id, $meta_key, wp_slash( $value ) );
 			}
 			$new = get_post_meta( $post_id, $meta_key, true );
 
