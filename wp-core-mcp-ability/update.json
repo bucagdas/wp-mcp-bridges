@@ -1,0 +1,16 @@
+{
+    "name": "WP Core MCP Ability",
+    "slug": "wp-core-mcp-ability",
+    "version": "1.3.1",
+    "author": "bucagdas",
+    "homepage": "https://github.com/bucagdas/wp-mcp-bridges/tree/main/wp-core-mcp-ability",
+    "requires": "7.0",
+    "tested": "7.0",
+    "requires_php": "8.0",
+    "download_url": "https://github.com/bucagdas/wp-mcp-bridges/releases/download/wp-core-mcp-ability-v1.3.1/wp-core-mcp-ability.zip",
+    "last_updated": "2026-08-08 08:54:26",
+    "sections": {
+        "description": "Full-coverage WordPress core abilities for MCP. Exposes WordPress's own native core/* abilities to MCP, plus generic options, posts, taxonomies/terms, comments and users CRUD.",
+        "changelog": "<h4>1.3.1</h4><ul><li>Initial public release: 59 abilities covering options, posts (including revisions and a surgical patch-post find/replace verb), taxonomies/terms, comments, users, menus, block widgets, media, plugin/theme status, Site Health, cron and rewrite rules, plus native core/* ability exposure.</li></ul>"
+    }
+}
