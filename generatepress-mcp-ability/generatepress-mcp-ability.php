@@ -3,7 +3,7 @@
  * Plugin Name: GeneratePress MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/generatepress-mcp-ability
  * Description: GeneratePress ecosystem abilities for MCP. Theme settings, GP Premium module status, GP Elements (full CRUD), GenerateBlocks settings, global styles (full CRUD) and Pro pattern libraries. Components are detected at runtime; abilities of missing components are simply not registered.
- * Version: 1.3.4
+ * Version: 1.3.5
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -337,23 +337,82 @@ class Plugin {
 		return current_user_can( apply_filters( 'generate_elements_admin_menu_capability', 'manage_options' ) );
 	}
 
-	public static function permission_edit_post( $input = null ): bool {
-		$post_id = isset( $input['post_id'] ) ? (int) $input['post_id'] : 0;
-		return $post_id > 0 && current_user_can( 'edit_post', $post_id );
+	public static function permission_edit_post( $input = null ) {
+		$post_id = self::resolve_post_id( $input );
+		if ( is_wp_error( $post_id ) ) {
+			return $post_id;
+		}
+		return current_user_can( 'edit_post', $post_id );
+	}
+
+	/**
+	 * Resolves a post id from the preferred `id` key, falling back to the
+	 * deprecated `post_id` alias. Returns a WP_Error (surfaced verbatim by
+	 * the MCP Adapter's execute-ability tool, instead of a generic
+	 * "Permission denied" — see docs/KOPRU-EKSIKLERI.md) when neither is a
+	 * positive integer, rather than silently defaulting to 0 and letting a
+	 * capability check on a non-existent object fail with no explanation.
+	 */
+	public static function resolve_post_id( $input ) {
+		$id = 0;
+		if ( isset( $input['id'] ) ) {
+			$id = (int) $input['id'];
+		} elseif ( isset( $input['post_id'] ) ) {
+			$id = (int) $input['post_id'];
+		}
+		if ( $id <= 0 ) {
+			return new \WP_Error(
+				'missing_id',
+				__( 'Provide "id" (the post/page ID). "post_id" is also accepted as a deprecated alias for backward compatibility.', 'generatepress-mcp-ability' )
+			);
+		}
+		return $id;
+	}
+
+	/**
+	 * Resolves a positive-integer identifier from $input[$key], or a
+	 * WP_Error if missing/invalid. Same rationale as resolve_post_id()
+	 * above, generalized to non-post identifiers (element_id, style_id).
+	 */
+	public static function resolve_id( $input, string $key ) {
+		$id = isset( $input[ $key ] ) ? (int) $input[ $key ] : 0;
+		if ( $id <= 0 ) {
+			return new \WP_Error(
+				'missing_id',
+				sprintf(
+					/* translators: %s: expected parameter name */
+					__( 'Provide "%s" (a positive integer ID).', 'generatepress-mcp-ability' ),
+					$key
+				)
+			);
+		}
+		return $id;
 	}
 
 	public static function permission_edit_posts( $input = null ): bool {
 		return current_user_can( 'edit_posts' );
 	}
 
-	public static function permission_gp_element_edit( $input = null ): bool {
-		$id = isset( $input['element_id'] ) ? (int) $input['element_id'] : 0;
-		return self::permission_gp_elements() && $id > 0 && current_user_can( 'edit_post', $id );
+	public static function permission_gp_element_edit( $input = null ) {
+		if ( ! self::permission_gp_elements() ) {
+			return false;
+		}
+		$id = self::resolve_id( $input, 'element_id' );
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+		return current_user_can( 'edit_post', $id );
 	}
 
-	public static function permission_gp_element_delete( $input = null ): bool {
-		$id = isset( $input['element_id'] ) ? (int) $input['element_id'] : 0;
-		return self::permission_gp_elements() && $id > 0 && current_user_can( 'delete_post', $id );
+	public static function permission_gp_element_delete( $input = null ) {
+		if ( ! self::permission_gp_elements() ) {
+			return false;
+		}
+		$id = self::resolve_id( $input, 'element_id' );
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+		return current_user_can( 'delete_post', $id );
 	}
 
 	/**
@@ -365,9 +424,15 @@ class Plugin {
 	 * this here, ability-level, gives an immediate named-capability error
 	 * instead of a silent status mismatch.
 	 */
-	public static function permission_gp_element_publish( $input = null ): bool {
-		$id = isset( $input['element_id'] ) ? (int) $input['element_id'] : 0;
-		if ( ! self::permission_gp_elements() || $id <= 0 || ! current_user_can( 'edit_post', $id ) ) {
+	public static function permission_gp_element_publish( $input = null ) {
+		if ( ! self::permission_gp_elements() ) {
+			return false;
+		}
+		$id = self::resolve_id( $input, 'element_id' );
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+		if ( ! current_user_can( 'edit_post', $id ) ) {
 			return false;
 		}
 		if ( isset( $input['status'] ) && 'publish' === $input['status'] ) {
@@ -400,9 +465,15 @@ class Plugin {
 		return true;
 	}
 
-	public static function permission_gb_style_edit( $input = null ): bool {
-		$id = isset( $input['style_id'] ) ? (int) $input['style_id'] : 0;
-		return current_user_can( 'edit_theme_options' ) && $id > 0 && current_user_can( 'edit_post', $id );
+	public static function permission_gb_style_edit( $input = null ) {
+		if ( ! current_user_can( 'edit_theme_options' ) ) {
+			return false;
+		}
+		$id = self::resolve_id( $input, 'style_id' );
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+		return current_user_can( 'edit_post', $id );
 	}
 
 	/**
@@ -413,9 +484,15 @@ class Plugin {
 	 * edit_theme_options + edit_post, neither of which implies
 	 * publish_posts, and wp_update_post() does not enforce it on its own.
 	 */
-	public static function permission_gb_style_publish( $input = null ): bool {
-		$id = isset( $input['style_id'] ) ? (int) $input['style_id'] : 0;
-		if ( ! current_user_can( 'edit_theme_options' ) || $id <= 0 || ! current_user_can( 'edit_post', $id ) ) {
+	public static function permission_gb_style_publish( $input = null ) {
+		if ( ! current_user_can( 'edit_theme_options' ) ) {
+			return false;
+		}
+		$id = self::resolve_id( $input, 'style_id' );
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+		if ( ! current_user_can( 'edit_post', $id ) ) {
 			return false;
 		}
 		if ( isset( $input['status'] ) && 'publish' === $input['status'] ) {
@@ -439,9 +516,15 @@ class Plugin {
 		return true;
 	}
 
-	public static function permission_gb_style_delete( $input = null ): bool {
-		$id = isset( $input['style_id'] ) ? (int) $input['style_id'] : 0;
-		return current_user_can( 'edit_theme_options' ) && $id > 0 && current_user_can( 'delete_post', $id );
+	public static function permission_gb_style_delete( $input = null ) {
+		if ( ! current_user_can( 'edit_theme_options' ) ) {
+			return false;
+		}
+		$id = self::resolve_id( $input, 'style_id' );
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+		return current_user_can( 'delete_post', $id );
 	}
 
 

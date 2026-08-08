@@ -276,18 +276,22 @@ class Theme {
 				'generatepress-mcp/get-post-layout',
 				array(
 					'label'               => __( 'Get per-post GeneratePress layout', 'generatepress-mcp-ability' ),
-					'description'         => __( 'Returns the GeneratePress layout metadata of one post or page: sidebar layout, footer widget count, full width content mode, and the Disable Elements flags (which take effect when GP Premium\'s Disable Elements module is active). Unset fields are null.', 'generatepress-mcp-ability' ),
+					'description'         => __( 'Returns the GeneratePress layout metadata of one post or page: sidebar layout, footer widget count, full width content mode, and the Disable Elements flags (which take effect when GP Premium\'s Disable Elements module is active). Provide id (the post/page ID) — post_id is also accepted as a deprecated alias. Unset fields are null.', 'generatepress-mcp-ability' ),
 					'category'            => Plugin::CATEGORY,
 					'input_schema'        => array(
-						'type'                 => 'object',
+						'type'                 => array( 'object', 'null' ),
 						'properties'           => array(
+							'id'      => array(
+								'type'        => 'integer',
+								'minimum'     => 1,
+								'description' => 'ID of the post or page to read. Preferred over post_id.',
+							),
 							'post_id' => array(
 								'type'        => 'integer',
 								'minimum'     => 1,
-								'description' => 'ID of the post or page to read.',
+								'description' => 'Deprecated alias for id, kept for backward compatibility. Use id instead.',
 							),
 						),
-						'required'             => array( 'post_id' ),
 						'additionalProperties' => false,
 					),
 					'output_schema'       => array(
@@ -304,15 +308,20 @@ class Theme {
 				'generatepress-mcp/update-post-layout',
 				array(
 					'label'               => __( 'Update per-post GeneratePress layout', 'generatepress-mcp-ability' ),
-					'description'         => __( 'Updates the GeneratePress layout metadata of one post or page. Provide only the fields to change: sidebar_layout (one of left-sidebar, right-sidebar, no-sidebar, both-sidebars, both-left, both-right; empty string resets to inherit), footer_widgets ("0"-"5", empty string resets), full_width_content ("true" for full width, "contained", empty string resets) and/or disable (per-element boolean map; false removes the flag). Returns old and new values per changed field, read back after the write.', 'generatepress-mcp-ability' ),
+					'description'         => __( 'Updates the GeneratePress layout metadata of one post or page. Provide id (the post/page ID; post_id is also accepted as a deprecated alias) plus only the fields to change: sidebar_layout (one of left-sidebar, right-sidebar, no-sidebar, both-sidebars, both-left, both-right; empty string resets to inherit), footer_widgets ("0"-"5", empty string resets), full_width_content ("true" for full width, "contained", empty string resets) and/or disable (per-element boolean map; false removes the flag). Returns old and new values per changed field, read back after the write.', 'generatepress-mcp-ability' ),
 					'category'            => Plugin::CATEGORY,
 					'input_schema'        => array(
-						'type'                 => 'object',
+						'type'                 => array( 'object', 'null' ),
 						'properties'           => array(
+							'id'                 => array(
+								'type'        => 'integer',
+								'minimum'     => 1,
+								'description' => 'ID of the post or page to update. Preferred over post_id.',
+							),
 							'post_id'            => array(
 								'type'        => 'integer',
 								'minimum'     => 1,
-								'description' => 'ID of the post or page to update.',
+								'description' => 'Deprecated alias for id, kept for backward compatibility. Use id instead.',
 							),
 							'sidebar_layout'     => array(
 								'type'        => 'string',
@@ -335,7 +344,6 @@ class Theme {
 								'additionalProperties' => array( 'type' => 'boolean' ),
 							),
 						),
-						'required'             => array( 'post_id' ),
 						'additionalProperties' => false,
 					),
 					'output_schema'       => array(
@@ -663,7 +671,10 @@ class Theme {
 	}
 
 	public static function cb_get_post_layout( $input ) {
-		$post_id = (int) $input['post_id'];
+		$post_id = Plugin::resolve_post_id( $input );
+		if ( is_wp_error( $post_id ) ) {
+			return $post_id;
+		}
 		if ( ! get_post( $post_id ) ) {
 			return new \WP_Error( 'post_not_found', __( 'No post exists with the given ID.', 'generatepress-mcp-ability' ) );
 		}
@@ -688,7 +699,10 @@ class Theme {
 	}
 
 	public static function cb_update_post_layout( $input ) {
-		$post_id = (int) $input['post_id'];
+		$post_id = Plugin::resolve_post_id( $input );
+		if ( is_wp_error( $post_id ) ) {
+			return $post_id;
+		}
 		if ( ! get_post( $post_id ) ) {
 			return new \WP_Error( 'post_not_found', __( 'No post exists with the given ID.', 'generatepress-mcp-ability' ) );
 		}
