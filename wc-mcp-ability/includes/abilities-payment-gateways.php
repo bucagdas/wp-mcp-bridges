@@ -61,7 +61,7 @@ class PaymentGateways {
 			'wc-mcp/toggle-payment-gateway',
 			array(
 				'label'               => __( 'Enable or disable a payment gateway', 'wc-mcp-ability' ),
-				'description'         => __( 'Enables or disables one payment gateway by id (e.g. "bacs", "cheque", "cod", or a third-party gateway\'s id). Only the enabled flag is written — this ability never writes gateway settings/credentials (use wp-admin for API key configuration). Returns {old,new} for the enabled state, read back after the write.', 'wc-mcp-ability' ),
+				'description'         => __( 'Enables or disables one payment gateway by id (e.g. "bacs", "cheque", "cod", or a third-party gateway\'s id). Only the enabled flag is written — this ability never writes gateway settings/credentials (use wp-admin for API key configuration). Requires confirm: true — disabling a gateway can block checkout for any customer who relied on it. Returns {old,new} for the enabled state, read back after the write.', 'wc-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
 					'type'                 => 'object',
@@ -74,8 +74,12 @@ class PaymentGateways {
 							'type'        => 'boolean',
 							'description' => 'true = enable, false = disable.',
 						),
+						'confirm' => array(
+							'type'        => 'boolean',
+							'description' => 'Must be true. Toggling a gateway changes what customers can pay with.',
+						),
 					),
-					'required'             => array( 'id', 'enabled' ),
+					'required'             => array( 'id', 'enabled', 'confirm' ),
 					'additionalProperties' => false,
 				),
 				'output_schema'       => array(
@@ -113,6 +117,10 @@ class PaymentGateways {
 	}
 
 	public static function cb_toggle( $input ) {
+		if ( true !== ( $input['confirm'] ?? false ) ) {
+			return new \WP_Error( 'confirm_required', __( 'Pass confirm: true to toggle a payment gateway.', 'wc-mcp-ability' ) );
+		}
+
 		$id  = (string) $input['id'];
 		$all = WC()->payment_gateways()->payment_gateways();
 		if ( ! isset( $all[ $id ] ) ) {
