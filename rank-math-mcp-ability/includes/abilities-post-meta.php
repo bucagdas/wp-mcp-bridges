@@ -504,7 +504,9 @@ class Post_Meta {
 				delete_post_meta( $post_id, $meta_key );
 			} else {
 				$clean = 'canonical_url' === $field ? esc_url_raw( (string) $value ) : sanitize_text_field( (string) $value );
-				update_post_meta( $post_id, $meta_key, $clean );
+				// update_post_meta() expects SLASHED data (the classic WP
+				// core "magic quotes" contract) — see docs/KOPRU-EKSIKLERI.md.
+				update_post_meta( $post_id, $meta_key, wp_slash( $clean ) );
 			}
 			$updated[ $field ] = array(
 				'old' => $old,
@@ -532,7 +534,8 @@ class Post_Meta {
 			if ( empty( $advanced ) ) {
 				delete_post_meta( $post_id, 'rank_math_advanced_robots' );
 			} else {
-				update_post_meta( $post_id, 'rank_math_advanced_robots', $advanced );
+				// update_post_meta() expects SLASHED data — see cb_update_post_seo()'s note.
+				update_post_meta( $post_id, 'rank_math_advanced_robots', wp_slash( $advanced ) );
 			}
 			$updated['advanced_robots'] = array(
 				'old' => $old,
@@ -578,7 +581,8 @@ class Post_Meta {
 				delete_post_meta( $post_id, $meta_key );
 			} else {
 				$clean = 'facebook_image' === $field ? esc_url_raw( (string) $value ) : sanitize_text_field( (string) $value );
-				update_post_meta( $post_id, $meta_key, $clean );
+				// update_post_meta() expects SLASHED data — see cb_update_post_seo()'s note.
+				update_post_meta( $post_id, $meta_key, wp_slash( $clean ) );
 			}
 			$updated[ $field ] = array(
 				'old' => $old,
@@ -618,7 +622,9 @@ class Post_Meta {
 		$meta_key = 'rank_math_schema_' . $type;
 
 		$old = self::meta_or_null( $post_id, $meta_key );
-		update_post_meta( $post_id, $meta_key, (array) $input['schema'] );
+		// update_post_meta() expects SLASHED data — see cb_update_post_seo()'s
+		// note; wp_slash() recurses into the schema object's nested values.
+		update_post_meta( $post_id, $meta_key, wp_slash( (array) $input['schema'] ) );
 
 		return array(
 			'post_id' => $post_id,
@@ -766,7 +772,8 @@ class Post_Meta {
 		foreach ( $ids as $id ) {
 			$old = self::meta_or_null( (int) $id, $meta_key );
 			if ( ! $dry_run ) {
-				update_post_meta( (int) $id, $meta_key, $value );
+				// update_post_meta() expects SLASHED data — see cb_update_post_seo()'s note.
+				update_post_meta( (int) $id, $meta_key, wp_slash( $value ) );
 				++$changed;
 			}
 			$posts[] = array(
