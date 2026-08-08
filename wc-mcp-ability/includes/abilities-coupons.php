@@ -404,6 +404,13 @@ class Coupons {
 		if ( in_array( $field, $integers, true ) ) {
 			return '' === $value ? '' : (int) $value;
 		}
+		// WC_Coupon::save() persists via wp_update_post()/update_post_meta(),
+		// which expect SLASHED data (the classic WP core "magic quotes"
+		// contract) — confirmed empirically 2026-08-08, description is the
+		// one free-text field here. See docs/KOPRU-EKSIKLERI.md.
+		if ( 'description' === $field ) {
+			return wp_slash( (string) $value );
+		}
 		return (string) $value;
 	}
 

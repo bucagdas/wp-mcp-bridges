@@ -278,7 +278,12 @@ class Customers {
 		$username = ! empty( $input['username'] ) ? sanitize_user( (string) $input['username'], true ) : '';
 		$password = ! empty( $input['password'] ) ? (string) $input['password'] : wp_generate_password();
 
-		$user_id = wc_create_new_customer( $email, $username, $password, $new_customer_args );
+		// wc_create_new_customer() calls wp_insert_user()/wp_update_user()
+		// directly (unlike WC_Customer's own setters, which already handle
+		// this internally — confirmed empirically 2026-08-08) and so
+		// expects SLASHED data the same way wp_insert_post() does. See
+		// docs/KOPRU-EKSIKLERI.md.
+		$user_id = wc_create_new_customer( $email, $username, $password, wp_slash( $new_customer_args ) );
 		if ( is_wp_error( $user_id ) ) {
 			return $user_id;
 		}

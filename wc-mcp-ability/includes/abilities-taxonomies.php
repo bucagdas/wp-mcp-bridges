@@ -395,7 +395,10 @@ class Taxonomies {
 			$args['parent'] = (int) $input['parent'];
 		}
 
-		$res = wp_insert_term( (string) $input['name'], $taxonomy, $args );
+		// wp_insert_term()/wp_update_term() expect SLASHED data (the
+		// classic WP core "magic quotes" contract) — confirmed empirically
+		// 2026-08-08. See docs/KOPRU-EKSIKLERI.md.
+		$res = wp_insert_term( wp_slash( (string) $input['name'] ), $taxonomy, wp_slash( $args ) );
 		if ( is_wp_error( $res ) ) {
 			return $res;
 		}
@@ -424,7 +427,8 @@ class Taxonomies {
 			$args['parent'] = (int) $input['parent'];
 		}
 
-		$res = wp_update_term( $id, $taxonomy, $args );
+		// See create_term()'s identical wp_slash() note.
+		$res = wp_update_term( $id, $taxonomy, wp_slash( $args ) );
 		if ( is_wp_error( $res ) ) {
 			return $res;
 		}
