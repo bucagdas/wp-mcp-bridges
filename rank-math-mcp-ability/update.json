@@ -1,16 +1,16 @@
 {
     "name": "Rank Math MCP Ability",
     "slug": "rank-math-mcp-ability",
-    "version": "2.0.1",
+    "version": "2.0.2",
     "author": "bucagdas",
     "homepage": "https://github.com/bucagdas/wp-mcp-bridges/tree/main/rank-math-mcp-ability",
     "requires": "7.0",
     "tested": "7.0",
     "requires_php": "8.0",
-    "download_url": "https://github.com/bucagdas/wp-mcp-bridges/releases/download/rank-math-mcp-ability-v2.0.1/rank-math-mcp-ability.zip",
-    "last_updated": "2026-08-08 10:00:19",
+    "download_url": "https://github.com/bucagdas/wp-mcp-bridges/releases/download/rank-math-mcp-ability-v2.0.2/rank-math-mcp-ability.zip",
+    "last_updated": "2026-08-08 11:07:17",
     "sections": {
         "description": "Full-coverage Rank Math SEO abilities for MCP. Per-post SEO metadata (core, robots, social, schema), settings, redirections, 404 monitor, sitemap tools, module toggling and analytics status.",
-        "changelog": "<h4>2.0.1</h4><ul><li>CRITICAL: fixed a data-corruption bug \u2014 update-post-seo, update-post-social, update-post-schema and bulk-update-seo-meta were not wp_slash()-ing content before writing to update_post_meta(), causing WordPress&#39;s own unslash step to strip literal backslashes from SEO metadata. Fixed at every affected call site. Settings and redirections/404 monitor were verified safe and left untouched.</li></ul><h4>2.0.0</h4><ul><li>Initial public release: 24 abilities covering post SEO metadata, settings, redirections, 404 monitor, sitemap and module toggling.</li></ul>"
+        "changelog": "<h4>2.0.2</h4><ul><li>Security audit: strip_sensitive() no longer removes a matched key outright. A key like connect_data matches on its own name (contains connect) even though most of what it holds isn't secret; silently dropping the whole key made sibling data disappear with no indication it ever existed. The matched key's value is now replaced with a REDACTED marker instead \u2014 not a leak fix (nothing new is exposed), an output-honesty fix.</li></ul><h4>2.0.1</h4><ul><li>CRITICAL: fixed a data-corruption bug \u2014 update-post-seo, update-post-social, update-post-schema and bulk-update-seo-meta were not wp_slash()-ing content before writing to update_post_meta(), causing WordPress&#39;s own unslash step to strip literal backslashes from SEO metadata. Fixed at every affected call site. Settings and redirections/404 monitor were verified safe and left untouched.</li></ul><h4>2.0.0</h4><ul><li>Initial public release: 24 abilities covering post SEO metadata, settings, redirections, 404 monitor, sitemap and module toggling.</li></ul>"
     }
 }
