@@ -3,7 +3,7 @@
  * Plugin Name: Rank Math MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/rank-math-mcp-ability
  * Description: Full-coverage Rank Math SEO abilities for MCP. Per-post SEO metadata (core, robots, social, schema), settings, redirections, 404 monitor, sitemap tools, module toggling and analytics status.
- * Version: 2.0.1
+ * Version: 2.0.2
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -110,17 +110,28 @@ class Plugin {
 		);
 	}
 
+	const REDACTED = '***REDACTED***';
+
 	public static function is_sensitive_key( string $key ): bool {
 		return (bool) preg_match( self::SENSITIVE_PATTERN, $key );
 	}
 
 	/**
-	 * Recursively remove keys that may contain secrets.
+	 * Recursively redact keys that may contain secrets. A matched key's
+	 * value is replaced with REDACTED rather than removed outright: a
+	 * key like "connect_data" matches on its own name (contains
+	 * "connect") even though most of what it holds (e.g. a "plan"
+	 * field) isn't secret — silently dropping the whole key made that
+	 * sibling data disappear with no indication anything was ever there,
+	 * which is over-hiding, not a leak, but still worth being precise
+	 * about. Found during the 2026-08-08 security audit; see
+	 * docs/KOPRU-EKSIKLERI.md.
 	 */
 	public static function strip_sensitive( array $settings ): array {
 		$out = array();
 		foreach ( $settings as $key => $value ) {
 			if ( is_string( $key ) && self::is_sensitive_key( $key ) ) {
+				$out[ $key ] = self::REDACTED;
 				continue;
 			}
 			$out[ $key ] = is_array( $value ) ? self::strip_sensitive( $value ) : $value;
