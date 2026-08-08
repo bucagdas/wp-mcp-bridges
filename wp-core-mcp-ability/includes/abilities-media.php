@@ -9,7 +9,7 @@
  * upload. Remote-URL sideload is deliberately NOT implemented — it
  * would let a caller make the server fetch an arbitrary URL (SSRF
  * risk); base64 upload avoids that by never making an outbound
- * request. See HEDEF-SURUM.md.
+ * request.
  *
  * @package WPCoreMCPAbility
  */

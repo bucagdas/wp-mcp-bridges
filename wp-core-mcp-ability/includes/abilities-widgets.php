@@ -4,9 +4,9 @@
  *
  * Targets the modern block-widget system (widget_block option +
  * sidebars_widgets mapping, widget ids like "block-N"), which is what
- * block-based themes (including this site's GeneratePress + Site
- * Editor support) use. Legacy WP_Widget-class widgets are out of
- * scope for this wave — see HEDEF-SURUM.md.
+ * block-based themes use. Legacy WP_Widget-class widgets are read-only
+ * here (see list-legacy-widgets); each class has its own settings
+ * schema, so CRUD isn't generic across them.
  *
  * @package WPCoreMCPAbility
  */

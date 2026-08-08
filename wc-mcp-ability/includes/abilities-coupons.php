@@ -3,8 +3,8 @@
  * Coupon CRUD abilities.
  *
  * WooCommerce coupons are a CPT (shop_coupon) wrapped by WC_Coupon.
- * Native WooCommerce ability coverage has no coupon surface at all
- * (see HEDEF-SURUM.md's native-ability inventory) — this fills that gap.
+ * Native WooCommerce ability coverage has no coupon surface at all —
+ * this fills that gap.
  *
  * @package WCMCPAbility
  */

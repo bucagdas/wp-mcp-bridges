@@ -68,7 +68,7 @@ class GB {
 				'generatepress-mcp/create-gb-global-style',
 				array(
 					'label'               => __( 'Create a GenerateBlocks global style', 'generatepress-mcp-ability' ),
-					'description'         => __( 'Creates a new GenerateBlocks Pro global style: a gblocks_global_style post plus its matching entries in the generateblocks_global_styles (compiled) and generateblocks_global_style_attrs (editor attributes) options — both are written together so they stay in sync. content is block markup and is validated the same way as create-gp-element (block-parse + wp_kses_post integrity). attrs is a free-form JSON object (GB Pro\'s own editor writes it); it must be a JSON object and, if not empty, is expected to at least be an object keyed by attribute name — not a list or scalar. NOTE: the underlying gblocks_global_style post type is deprecated and only registered by GenerateBlocks Pro on demand; if it is not currently registered, this ability re-registers it for the request (see HEDEF-SURUM.md) so creation can proceed. Set dry_run: true to validate without creating anything.', 'generatepress-mcp-ability' ),
+					'description'         => __( 'Creates a new GenerateBlocks Pro global style: a gblocks_global_style post plus its matching entries in the generateblocks_global_styles (compiled) and generateblocks_global_style_attrs (editor attributes) options — both are written together so they stay in sync. content is block markup and is validated the same way as create-gp-element (block-parse + wp_kses_post integrity). attrs is a free-form JSON object (GB Pro\'s own editor writes it); it must be a JSON object and, if not empty, is expected to at least be an object keyed by attribute name — not a list or scalar. NOTE: the underlying gblocks_global_style post type is deprecated and only registered by GenerateBlocks Pro on demand; if it is not currently registered, this ability re-registers it for the request so creation can proceed. Set dry_run: true to validate without creating anything.', 'generatepress-mcp-ability' ),
 					'category'            => Plugin::CATEGORY,
 					'input_schema'        => array(
 						'type'                 => 'object',
@@ -279,7 +279,7 @@ class GB {
 				'generatepress-mcp/update-gb-pattern-library',
 				array(
 					'label'               => __( 'Update a GenerateBlocks pattern library', 'generatepress-mcp-ability' ),
-					'description'         => __( 'Updates the name and/or isEnabled flag of a locally-registered pattern library entry. Does not accept or change publicKey/domain (connecting a new remote library is a GB Pro UI operation, out of scope here — see HEDEF-SURUM.md). At least one of name, is_enabled is required. Returns {old,new}, with publicKey/domain redacted in both.', 'generatepress-mcp-ability' ),
+					'description'         => __( 'Updates the name and/or isEnabled flag of a locally-registered pattern library entry. Does not accept or change publicKey/domain (connecting a new remote library is a GB Pro UI operation, out of scope here). At least one of name, is_enabled is required. Returns {old,new}, with publicKey/domain redacted in both.', 'generatepress-mcp-ability' ),
 					'category'            => Plugin::CATEGORY,
 					'input_schema'        => array(
 						'type'                 => 'object',
@@ -588,9 +588,8 @@ class GB {
 	 * otherwise fail. This mirrors GB Pro's own register_post_type()
 	 * call (includes/class-global-styles.php) so create-gb-global-style
 	 * can "re-birth" the CPT for this request when it's needed —
-	 * matching GB Pro's own args exactly is a deliberate, documented
-	 * coupling (see HEDEF-SURUM.md) that may need updating if GB Pro
-	 * changes that registration.
+	 * matching GB Pro's own args exactly is a deliberate coupling that
+	 * may need updating if GB Pro changes that registration.
 	 */
 	private static function ensure_global_style_cpt(): void {
 		if ( post_type_exists( 'gblocks_global_style' ) ) {

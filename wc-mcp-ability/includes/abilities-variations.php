@@ -4,8 +4,7 @@
  *
  * Native WooCommerce ability coverage (product-create/product-update)
  * explicitly excludes the "variable" product type and has no variation
- * surface at all (see HEDEF-SURUM.md's native-ability inventory) —
- * this fills that gap.
+ * surface at all — this fills that gap.
  *
  * @package WCMCPAbility
  */

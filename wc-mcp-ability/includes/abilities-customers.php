@@ -5,8 +5,8 @@
  * WooCommerce customers are WordPress users (normally role "customer");
  * WC_Customer wraps user core fields plus billing/shipping address meta
  * and order-derived stats (order_count, total_spent). Native WooCommerce
- * ability coverage (products-query/product-create/... etc., see
- * HEDEF-SURUM.md) has no customer surface at all — this fills that gap.
+ * ability coverage (products-query/product-create/... etc.) has no
+ * customer surface at all — this fills that gap.
  *
  * @package WCMCPAbility
  */

@@ -3,9 +3,9 @@
  * Product category/tag assignment and image assignment abilities.
  *
  * Native product-create/product-update abilities cover a narrow field
- * set (name, sku, description, price, stock — see HEDEF-SURUM.md's
- * native-ability inventory) and have no way to assign a product's
- * categories, tags, featured image or gallery. This fills that gap.
+ * set (name, sku, description, price, stock) and have no way to assign
+ * a product's categories, tags, featured image or gallery. This fills
+ * that gap.
  * It does not duplicate product creation/pricing/stock, which the
  * native abilities and update-product-category/tag already cover.
  *

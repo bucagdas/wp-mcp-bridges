@@ -5,10 +5,9 @@
  * WooCommerce's native abilities cover orders-query (read), order-add-note
  * and order-update-status, but NOT creating an order or refunding one —
  * the REST-derived orders-create ability only registers on WooCommerce's
- * own separate (deprecated) MCP endpoint, not the shared adapter this
- * factory targets (see HEDEF-SURUM.md's native-ability inventory). This
- * fills that specific gap; it does not duplicate list/get/status/note,
- * which the native abilities already cover.
+ * own separate (deprecated) MCP endpoint, not the shared MCP Adapter
+ * default server. This fills that specific gap; it does not duplicate
+ * list/get/status/note, which the native abilities already cover.
  *
  * @package WCMCPAbility
  */
