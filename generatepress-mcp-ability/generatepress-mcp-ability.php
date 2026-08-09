@@ -3,7 +3,7 @@
  * Plugin Name: GeneratePress MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/generatepress-mcp-ability
  * Description: GeneratePress ecosystem abilities for MCP. Theme settings, GP Premium module status, GP Elements (full CRUD), GenerateBlocks settings, global styles (full CRUD) and Pro pattern libraries. Components are detected at runtime; abilities of missing components are simply not registered.
- * Version: 1.3.9
+ * Version: 1.4.0
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -22,6 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 require_once __DIR__ . '/includes/abilities-theme.php';
 require_once __DIR__ . '/includes/abilities-gp.php';
 require_once __DIR__ . '/includes/abilities-gb.php';
+require_once __DIR__ . '/includes/abilities-page-header.php';
 
 require_once __DIR__ . '/includes/plugin-update-checker/plugin-update-checker.php';
 \YahnisElsts\PluginUpdateChecker\v5p7\PucFactory::buildUpdateChecker(
@@ -188,6 +189,7 @@ class Plugin {
 		'page_header'   => 'generate_page_header_settings',
 		'backgrounds'   => 'generate_background_settings',
 		'hooks'         => 'generate_hooks',
+		'woocommerce'   => 'generate_woocommerce_settings',
 	);
 
 	/**
@@ -293,6 +295,155 @@ class Plugin {
 	/** Layout element content-area vocabulary. */
 	const GP_ELEMENT_CONTENT_AREAS = array( '', 'contained', 'full-width' );
 
+
+	/**
+	 * Legacy Page Header module post meta, as input key => [meta key, kind].
+	 *
+	 * These 46 keys are the exact $options list GP Premium's own metabox
+	 * saves (page-header/functions/metabox.php:594-641) — generated from
+	 * that source rather than transcribed, because an invented key name
+	 * writes a meta GP never reads and measures as a silent no-op (see
+	 * CLAUDE.md A4 measurement discipline).
+	 *
+	 * IMPORTANT — this is a DIFFERENT SYSTEM from the Elements "hero"
+	 * (GP_ELEMENT_HEADER_FIELDS below). The legacy module stores these on
+	 * any post/page and on its own generate_page_header CPT; the hero
+	 * stores _generate_hero_* on a gp_elements post whose
+	 * _generate_element_type is "header". They share no code path, and
+	 * the legacy module has no "type" field at all.
+	 *
+	 * "kind" drives sanitization on write, mirroring GP's own filters:
+	 * html = wp_kses_post (or raw for unfiltered_html), url = esc_url_raw,
+	 * int = absint, text = sanitize_text_field.
+	 */
+	const PAGE_HEADER_FIELDS = array(
+		'content'                           => array( '_meta-generate-page-header-content', 'html' ),
+		'image'                             => array( '_meta-generate-page-header-image', 'url' ),
+		'image_id'                          => array( '_meta-generate-page-header-image-id', 'int' ),
+		'image_link'                        => array( '_meta-generate-page-header-image-link', 'url' ),
+		'enable_image_crop'                 => array( '_meta-generate-page-header-enable-image-crop', 'text' ),
+		'image_crop'                        => array( '_meta-generate-page-header-image-crop', 'text' ),
+		'image_width'                       => array( '_meta-generate-page-header-image-width', 'int' ),
+		'image_height'                      => array( '_meta-generate-page-header-image-height', 'int' ),
+		'image_background_type'             => array( '_meta-generate-page-header-image-background-type', 'text' ),
+		'inner_container'                   => array( '_meta-generate-page-header-inner-container', 'text' ),
+		'image_background_alignment'        => array( '_meta-generate-page-header-image-background-alignment', 'text' ),
+		'image_background_spacing'          => array( '_meta-generate-page-header-image-background-spacing', 'int' ),
+		'image_background_spacing_unit'     => array( '_meta-generate-page-header-image-background-spacing-unit', 'text' ),
+		'left_right_padding'                => array( '_meta-generate-page-header-left-right-padding', 'int' ),
+		'left_right_padding_unit'           => array( '_meta-generate-page-header-left-right-padding-unit', 'text' ),
+		'image_background_color'            => array( '_meta-generate-page-header-image-background-color', 'text' ),
+		'image_background_text_color'       => array( '_meta-generate-page-header-image-background-text-color', 'text' ),
+		'image_background_link_color'       => array( '_meta-generate-page-header-image-background-link-color', 'text' ),
+		'image_background_link_color_hover' => array( '_meta-generate-page-header-image-background-link-color-hover', 'text' ),
+		'navigation_background'             => array( '_meta-generate-page-header-navigation-background', 'text' ),
+		'navigation_text'                   => array( '_meta-generate-page-header-navigation-text', 'text' ),
+		'navigation_background_hover'       => array( '_meta-generate-page-header-navigation-background-hover', 'text' ),
+		'navigation_text_hover'             => array( '_meta-generate-page-header-navigation-text-hover', 'text' ),
+		'navigation_background_current'     => array( '_meta-generate-page-header-navigation-background-current', 'text' ),
+		'navigation_text_current'           => array( '_meta-generate-page-header-navigation-text-current', 'text' ),
+		'site_title'                        => array( '_meta-generate-page-header-site-title', 'text' ),
+		'site_tagline'                      => array( '_meta-generate-page-header-site-tagline', 'text' ),
+		'video'                             => array( '_meta-generate-page-header-video', 'url' ),
+		'video_ogv'                         => array( '_meta-generate-page-header-video-ogv', 'url' ),
+		'video_webm'                        => array( '_meta-generate-page-header-video-webm', 'url' ),
+		'video_overlay'                     => array( '_meta-generate-page-header-video-overlay', 'text' ),
+		'content_autop'                     => array( '_meta-generate-page-header-content-autop', 'text' ),
+		'content_padding'                   => array( '_meta-generate-page-header-content-padding', 'text' ),
+		'image_background'                  => array( '_meta-generate-page-header-image-background', 'text' ),
+		'full_screen'                       => array( '_meta-generate-page-header-full-screen', 'text' ),
+		'vertical_center'                   => array( '_meta-generate-page-header-vertical-center', 'text' ),
+		'image_background_fixed'            => array( '_meta-generate-page-header-image-background-fixed', 'text' ),
+		'image_background_overlay'          => array( '_meta-generate-page-header-image-background-overlay', 'text' ),
+		'combine'                           => array( '_meta-generate-page-header-combine', 'text' ),
+		'absolute_position'                 => array( '_meta-generate-page-header-absolute-position', 'text' ),
+		'transparent_navigation'            => array( '_meta-generate-page-header-transparent-navigation', 'text' ),
+		'add_to_excerpt'                    => array( '_meta-generate-page-header-add-to-excerpt', 'text' ),
+		'logo'                              => array( '_meta-generate-page-header-logo', 'url' ),
+		'logo_id'                           => array( '_meta-generate-page-header-logo-id', 'int' ),
+		'navigation_logo'                   => array( '_meta-generate-page-header-navigation-logo', 'url' ),
+		'navigation_logo_id'                => array( '_meta-generate-page-header-navigation-logo-id', 'int' ),
+	);
+
+	/**
+	 * Elements "hero" (header type) post meta, as input key => [meta key,
+	 * kind]. Generated from GP Premium's own $hero_values list
+	 * (elements/class-metabox.php:1751-1802). Input keys drop the shared
+	 * "_generate_" prefix, so _generate_hero_container => hero_container
+	 * and _generate_navigation_colors => navigation_colors.
+	 *
+	 * "kind" mirrors GP's own sanitize branches: number = absint,
+	 * key = sanitize_key, attribute = esc_attr, text/color =
+	 * sanitize_text_field. Note GP does NOT use sanitize_hex_color for
+	 * "color" — we match its behaviour rather than being stricter, so a
+	 * value written here round-trips identically through GP's own metabox.
+	 */
+	const GP_ELEMENT_HEADER_FIELDS = array(
+		'hero_custom_classes'                 => array( '_generate_hero_custom_classes', 'attribute' ),
+		'hero_container'                      => array( '_generate_hero_container', 'text' ),
+		'hero_inner_container'                => array( '_generate_hero_inner_container', 'text' ),
+		'hero_horizontal_alignment'           => array( '_generate_hero_horizontal_alignment', 'text' ),
+		'hero_full_screen'                    => array( '_generate_hero_full_screen', 'key' ),
+		'hero_vertical_alignment'             => array( '_generate_hero_vertical_alignment', 'text' ),
+		'hero_padding_top'                    => array( '_generate_hero_padding_top', 'number' ),
+		'hero_padding_top_unit'               => array( '_generate_hero_padding_top_unit', 'text' ),
+		'hero_padding_right'                  => array( '_generate_hero_padding_right', 'number' ),
+		'hero_padding_right_unit'             => array( '_generate_hero_padding_right_unit', 'text' ),
+		'hero_padding_bottom'                 => array( '_generate_hero_padding_bottom', 'number' ),
+		'hero_padding_bottom_unit'            => array( '_generate_hero_padding_bottom_unit', 'text' ),
+		'hero_padding_left'                   => array( '_generate_hero_padding_left', 'number' ),
+		'hero_padding_left_unit'              => array( '_generate_hero_padding_left_unit', 'text' ),
+		'hero_padding_top_mobile'             => array( '_generate_hero_padding_top_mobile', 'number' ),
+		'hero_padding_top_unit_mobile'        => array( '_generate_hero_padding_top_unit_mobile', 'text' ),
+		'hero_padding_right_mobile'           => array( '_generate_hero_padding_right_mobile', 'number' ),
+		'hero_padding_right_unit_mobile'      => array( '_generate_hero_padding_right_unit_mobile', 'text' ),
+		'hero_padding_bottom_mobile'          => array( '_generate_hero_padding_bottom_mobile', 'number' ),
+		'hero_padding_bottom_unit_mobile'     => array( '_generate_hero_padding_bottom_unit_mobile', 'text' ),
+		'hero_padding_left_mobile'            => array( '_generate_hero_padding_left_mobile', 'number' ),
+		'hero_padding_left_unit_mobile'       => array( '_generate_hero_padding_left_unit_mobile', 'text' ),
+		'hero_background_image'               => array( '_generate_hero_background_image', 'key' ),
+		'hero_disable_featured_image'         => array( '_generate_hero_disable_featured_image', 'key' ),
+		'hero_background_color'               => array( '_generate_hero_background_color', 'color' ),
+		'hero_text_color'                     => array( '_generate_hero_text_color', 'color' ),
+		'hero_link_color'                     => array( '_generate_hero_link_color', 'color' ),
+		'hero_background_link_color_hover'    => array( '_generate_hero_background_link_color_hover', 'color' ),
+		'hero_background_overlay'             => array( '_generate_hero_background_overlay', 'key' ),
+		'hero_background_position'            => array( '_generate_hero_background_position', 'text' ),
+		'hero_background_parallax'            => array( '_generate_hero_background_parallax', 'key' ),
+		'site_header_merge'                   => array( '_generate_site_header_merge', 'key' ),
+		'site_header_height'                  => array( '_generate_site_header_height', 'number' ),
+		'site_header_height_mobile'           => array( '_generate_site_header_height_mobile', 'number' ),
+		'navigation_colors'                   => array( '_generate_navigation_colors', 'key' ),
+		'site_logo'                           => array( '_generate_site_logo', 'number' ),
+		'retina_logo'                         => array( '_generate_retina_logo', 'number' ),
+		'navigation_logo'                     => array( '_generate_navigation_logo', 'number' ),
+		'mobile_logo'                         => array( '_generate_mobile_logo', 'number' ),
+		'navigation_location'                 => array( '_generate_navigation_location', 'key' ),
+		'site_header_background_color'        => array( '_generate_site_header_background_color', 'text' ),
+		'site_header_title_color'             => array( '_generate_site_header_title_color', 'text' ),
+		'site_header_tagline_color'           => array( '_generate_site_header_tagline_color', 'text' ),
+		'navigation_background_color'         => array( '_generate_navigation_background_color', 'text' ),
+		'navigation_text_color'               => array( '_generate_navigation_text_color', 'text' ),
+		'navigation_background_color_hover'   => array( '_generate_navigation_background_color_hover', 'text' ),
+		'navigation_text_color_hover'         => array( '_generate_navigation_text_color_hover', 'text' ),
+		'navigation_background_color_current' => array( '_generate_navigation_background_color_current', 'text' ),
+		'navigation_text_color_current'       => array( '_generate_navigation_text_color_current', 'text' ),
+	);
+
+	/**
+	 * The only hero metas where a literal "0" is meaningful and must be
+	 * preserved. GP's metabox deletes any falsy value, so it special-cases
+	 * these four with a "zero" sentinel before the falsy test
+	 * (elements/class-metabox.php:1819-1832). Everything else follows the
+	 * plain empty-equals-delete rule.
+	 */
+	const GP_ELEMENT_HERO_ZERO_KEYS = array(
+		'hero_padding_top_mobile',
+		'hero_padding_right_mobile',
+		'hero_padding_bottom_mobile',
+		'hero_padding_left_mobile',
+	);
+
 	public static function init(): void {
 		add_action( 'wp_abilities_api_categories_init', array( __CLASS__, 'register_category' ) );
 		add_action( 'wp_abilities_api_init', array( __CLASS__, 'register_abilities' ) );
@@ -317,6 +468,137 @@ class Plugin {
 
 	public static function has_gb_pro(): bool {
 		return defined( 'GENERATEBLOCKS_PRO_VERSION' );
+	}
+
+	/**
+	 * Whether one GP Premium module is active, using GP's own helper so a
+	 * site that activates a module by constant (the legacy standalone-plugin
+	 * route) is recognised exactly as GP recognises it. Falls back to the
+	 * raw option when the helper is unavailable.
+	 *
+	 * @param string $module Module key as in GP_MODULES.
+	 */
+	public static function is_module_active( string $module ): bool {
+		if ( ! isset( self::GP_MODULES[ $module ] ) ) {
+			return false;
+		}
+		if ( function_exists( 'generatepress_is_module_active' ) ) {
+			return (bool) generatepress_is_module_active( 'generate_package_' . $module, self::GP_MODULES[ $module ] );
+		}
+		return 'activated' === get_option( 'generate_package_' . $module );
+	}
+
+	/**
+	 * Reads a set of post metas described by a FIELDS map (input key =>
+	 * [meta key, kind]). Absent metas come back as empty strings, which is
+	 * exactly how GP's own readers treat them — none of these metas has a
+	 * stored default.
+	 */
+	public static function read_meta_fields( int $post_id, array $fields ): array {
+		$out = array();
+		foreach ( $fields as $input_key => $spec ) {
+			$out[ $input_key ] = (string) get_post_meta( $post_id, $spec[0], true );
+		}
+		return $out;
+	}
+
+	/**
+	 * Writes a set of post metas, mirroring GP Premium's own save
+	 * semantics, and reports honestly what happened.
+	 *
+	 * EMPTY EQUALS DELETE. Both GP modules save with a plain
+	 * `if ( $value ) update_post_meta() else delete_post_meta()`
+	 * (page-header/functions/metabox.php:664-668 and
+	 * elements/class-metabox.php:1830-1837). So "" and "0" are BOTH falsy
+	 * and BOTH remove the meta — there is no way, through GP's own UI, to
+	 * end up with a stored "0". We deliberately mirror that instead of
+	 * storing "0" faithfully: a value GP's own screens can never produce
+	 * is a state its code is not written to read back.
+	 *
+	 * The consequence has to be visible to the caller rather than hidden,
+	 * so each changed field reports {old, new} where `new` is null when the
+	 * meta was removed — never the "0" that was asked for. A caller that
+	 * sends "0" therefore sees `{"old": "120", "new": null}` and knows the
+	 * field was cleared, not set to zero.
+	 *
+	 * $zero_keys names the fields where GP itself preserves a literal "0"
+	 * via its "zero" sentinel; for those, "0" is stored and reported as
+	 * "0".
+	 *
+	 * @return array Map of input key => {old, new} for CHANGED fields only.
+	 */
+	public static function write_meta_fields( int $post_id, array $fields, array $values, array $zero_keys = array() ) {
+		$changed = array();
+		foreach ( $values as $input_key => $value ) {
+			if ( ! isset( $fields[ $input_key ] ) ) {
+				return new \WP_Error(
+					'unknown_field',
+					sprintf(
+						/* translators: 1: rejected field name, 2: comma-separated list of accepted names */
+						__( 'Unknown field "%1$s". Accepted fields: %2$s.', 'generatepress-mcp-ability' ),
+						$input_key,
+						implode( ', ', array_keys( $fields ) )
+					)
+				);
+			}
+			list( $meta_key, $kind ) = $fields[ $input_key ];
+			$old                     = (string) get_post_meta( $post_id, $meta_key, true );
+			$clean                   = self::sanitize_meta_value( $value, $kind );
+
+			$keeps_zero = in_array( $input_key, $zero_keys, true );
+			if ( '' === $clean || ( '0' === $clean && ! $keeps_zero ) ) {
+				delete_post_meta( $post_id, $meta_key );
+				$new = null;
+			} else {
+				// update_post_meta() expects SLASHED data and unslashes on
+				// the way in, so an unslashed write silently eats every
+				// backslash. That matters here: the page header "content"
+				// field is arbitrary HTML. See the slashing round in
+				// docs/KOPRU-EKSIKLERI.md.
+				update_post_meta( $post_id, $meta_key, wp_slash( $clean ) );
+				$new = (string) get_post_meta( $post_id, $meta_key, true );
+			}
+
+			if ( ( null === $new ? '' : $new ) !== $old ) {
+				$changed[ $input_key ] = array(
+					'old' => '' === $old ? null : $old,
+					'new' => $new,
+				);
+			}
+		}
+		return $changed;
+	}
+
+	/**
+	 * Sanitizes one meta value the way GP's own metabox would for that
+	 * field kind. Deliberately no stricter than GP: matching its behaviour
+	 * keeps values round-tripping identically through its own screens.
+	 *
+	 * @param mixed  $value Raw input value.
+	 * @param string $kind  One of html|url|int|text|number|key|attribute|color.
+	 */
+	private static function sanitize_meta_value( $value, string $kind ): string {
+		if ( null === $value || false === $value ) {
+			return '';
+		}
+		if ( true === $value ) {
+			$value = '1';
+		}
+		switch ( $kind ) {
+			case 'html':
+				return current_user_can( 'unfiltered_html' ) ? (string) $value : wp_kses_post( (string) $value );
+			case 'url':
+				return esc_url_raw( (string) $value );
+			case 'int':
+			case 'number':
+				return '' === trim( (string) $value ) ? '' : (string) absint( $value );
+			case 'key':
+				return sanitize_key( (string) $value );
+			case 'attribute':
+				return esc_attr( (string) $value );
+			default:
+				return sanitize_text_field( (string) $value );
+		}
 	}
 
 	/**
@@ -398,6 +680,7 @@ class Plugin {
 		Theme::register();
 		GP::register();
 		GB::register();
+		PageHeader::register();
 	}
 
 	/**

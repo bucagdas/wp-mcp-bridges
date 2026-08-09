@@ -293,6 +293,20 @@ class GP {
 								'description' => 'Block sub-type (type "block" only) — decides which theme hook the element renders on. Without it a block element is stored but never rendered.',
 							),
 							'layout_settings'     => self::layout_settings_schema(),
+							'header_settings'     => self::header_settings_schema(),
+							'editor_width'        => array(
+								'type'        => array( 'integer', 'null' ),
+								'minimum'     => 0,
+								'description' => 'Block editor canvas width for a "block" element. 0 or null removes the override.',
+							),
+							'editor_width_unit'   => array(
+								'type'        => array( 'string', 'null' ),
+								'description' => 'Unit for editor_width, e.g. "px" or "%". Empty removes it.',
+							),
+							'ignore_languages'    => array(
+								'type'        => 'boolean',
+								'description' => 'Polylang only: show this element in every language instead of only its own. GP Premium has no WPML integration in PHP — this is its Polylang flag (_generate_element_ignore_languages).',
+							),
 							'display_conditions'  => array(
 								'type'        => 'array',
 								'description' => 'Display condition rules (GP Premium condition format).',
@@ -358,6 +372,20 @@ class GP {
 								'description' => 'Block sub-type (type "block" only) — which theme hook the element renders on.',
 							),
 							'layout_settings'     => self::layout_settings_schema(),
+							'header_settings'     => self::header_settings_schema(),
+							'editor_width'        => array(
+								'type'        => array( 'integer', 'null' ),
+								'minimum'     => 0,
+								'description' => 'Block editor canvas width for a "block" element. 0 or null removes the override.',
+							),
+							'editor_width_unit'   => array(
+								'type'        => array( 'string', 'null' ),
+								'description' => 'Unit for editor_width, e.g. "px" or "%". Empty removes it.',
+							),
+							'ignore_languages'    => array(
+								'type'        => 'boolean',
+								'description' => 'Polylang only: show this element in every language instead of only its own. GP Premium has no WPML integration in PHP — this is its Polylang flag (_generate_element_ignore_languages).',
+							),
 							'display_conditions'  => array( 'type' => 'array' ),
 							'exclude_conditions'  => array( 'type' => 'array' ),
 							'user_conditions'     => array( 'type' => 'array' ),
@@ -415,6 +443,41 @@ class GP {
 					'meta'                => Plugin::meta( true, false, true ),
 				)
 			);
+
+			wp_register_ability(
+				'generatepress-mcp/reset-gp-premium-settings',
+				array(
+					'label'               => __( 'Reset GP Premium settings', 'generatepress-mcp-ability' ),
+					'description'         => __( 'Runs GP Premium\'s own reset routine, which DELETES the settings options of the selected modules, removes the related theme mods, and clears the compiled CSS so it rebuilds. This is not an undo — there is no backup, so export first with export-customizer-settings if you may want the values back. Requires confirm: true. Use dry_run: true first to see exactly which options and theme mods would be deleted without touching anything. Omitting "modules" resets every exportable module plus Core (generate_settings), which is the whole site design.', 'generatepress-mcp-ability' ),
+					'category'            => Plugin::CATEGORY,
+					'input_schema'        => array(
+						'type'                 => 'object',
+						'properties'           => array(
+							'modules' => array(
+								'type'        => 'array',
+								'items'       => array( 'type' => 'string' ),
+								'description' => 'Module keys to reset, e.g. ["Core", "Blog"]. Keys come from GP Premium\'s own exportable module list, which dry_run reports. Omit to reset everything exportable.',
+							),
+							'dry_run' => array(
+								'type'        => 'boolean',
+								'description' => 'Report what would be deleted and change nothing. Does not require confirm.',
+							),
+							'confirm' => array(
+								'type'        => 'boolean',
+								'description' => 'Must be true for a real reset. Ignored when dry_run is true.',
+							),
+						),
+						'additionalProperties' => false,
+					),
+					'output_schema'       => array(
+						'type'        => 'object',
+						'description' => 'On dry_run: {dry_run:true, modules, options_to_delete, theme_mods_to_remove, available_modules}. On a real reset: {reset:true, modules, options_deleted, message}.',
+					),
+					'execute_callback'    => array( __CLASS__, 'cb_reset_gp_premium' ),
+					'permission_callback' => array( Plugin::class, 'permission_manage_options' ),
+					'meta'                => Plugin::meta( false, true, true ),
+				)
+			);
 		}
 
 	}
@@ -422,6 +485,120 @@ class GP {
 	// ---------------------------------------------------------------------
 	// Execute callbacks
 	// ---------------------------------------------------------------------
+
+	/**
+	 * Resets GP Premium settings through GP Premium's OWN reset endpoint
+	 * (generatepress-pro/v1/reset/), dispatched internally with
+	 * rest_do_request(). We deliberately do not reimplement the routine:
+	 * it deletes module options, strips theme mods, clears both dynamic-CSS
+	 * caches, resets the external CSS file stamp AND removes GeneratePress
+	 * Site CSS from Additional CSS — a hand-rolled copy would drift from
+	 * GP's version on the next update, and this is a destructive operation
+	 * where drifting means losing the wrong thing.
+	 *
+	 * The route enforces its own manage_options check on top of ours.
+	 *
+	 * dry_run reads GP's own maps (get_exportable_modules() /
+	 * get_setting_keys() / get_theme_mods()) to report exactly what the
+	 * real call would delete, without dispatching anything.
+	 */
+	public static function cb_reset_gp_premium( $input ) {
+		if ( ! class_exists( '\GeneratePress_Pro_Dashboard' ) ) {
+			return new \WP_Error(
+				'reset_unavailable',
+				__( 'GP Premium\'s dashboard class is not loaded, so its reset routine cannot be reached.', 'generatepress-mcp-ability' )
+			);
+		}
+
+		$available = \GeneratePress_Pro_Dashboard::get_exportable_modules();
+		$requested = isset( $input['modules'] ) ? (array) $input['modules'] : array();
+
+		if ( $requested ) {
+			$unknown = array_diff( $requested, array_keys( $available ) );
+			if ( $unknown ) {
+				return new \WP_Error(
+					'unknown_module',
+					sprintf(
+						/* translators: 1: rejected module keys, 2: accepted module keys */
+						__( 'Unknown module(s): %1$s. Exportable modules on this site: %2$s.', 'generatepress-mcp-ability' ),
+						implode( ', ', $unknown ),
+						implode( ', ', array_keys( $available ) )
+					)
+				);
+			}
+			$items = array_intersect_key( $available, array_flip( $requested ) );
+		} else {
+			$items = $available;
+		}
+
+		$option_names = array();
+		foreach ( $items as $data ) {
+			if ( isset( $data['settings'] ) ) {
+				$option_names[] = $data['settings'];
+			}
+		}
+		// GP only deletes names that are on its own whitelist.
+		$options_to_delete = array_values(
+			array_intersect( \GeneratePress_Pro_Dashboard::get_setting_keys(), $option_names )
+		);
+
+		$theme_mods = \GeneratePress_Pro_Dashboard::get_theme_mods();
+		$mods_to_remove = array();
+		foreach ( $theme_mods as $mod ) {
+			if ( 'generate_copyright' === $mod ) {
+				if ( in_array( 'copyright', $option_names, true ) ) {
+					$mods_to_remove[] = $mod;
+				}
+			} elseif ( in_array( 'generate_settings', $option_names, true ) ) {
+				$mods_to_remove[] = $mod;
+			}
+		}
+
+		if ( ! empty( $input['dry_run'] ) ) {
+			return array(
+				'dry_run'              => true,
+				'modules'              => array_keys( $items ),
+				'options_to_delete'    => $options_to_delete,
+				'theme_mods_to_remove' => $mods_to_remove,
+				'available_modules'    => array_keys( $available ),
+			);
+		}
+
+		if ( empty( $input['confirm'] ) ) {
+			return new \WP_Error(
+				'confirm_required',
+				sprintf(
+					/* translators: %s: comma-separated option names */
+					__( 'Pass confirm: true. This deletes these options with no backup: %s. Run with dry_run: true first.', 'generatepress-mcp-ability' ),
+					implode( ', ', $options_to_delete ) ? implode( ', ', $options_to_delete ) : '(none)'
+				)
+			);
+		}
+
+		// No trailing slash: GP registers '/reset/' but register_rest_route()
+		// trims it, so the dispatchable path is .../v1/reset. Verified
+		// against the live route table — a trailing slash 404s here.
+		// Also note the THEME registers its own /generatepress/v1/reset;
+		// this is deliberately GP Premium's /generatepress-pro/ one.
+		$request = new \WP_REST_Request( 'POST', '/generatepress-pro/v1/reset' );
+		$request->set_param( 'items', $items );
+		$response = rest_do_request( $request );
+
+		if ( $response->is_error() ) {
+			return $response->as_error();
+		}
+
+		$data = $response->get_data();
+
+		return array(
+			'reset'           => true,
+			'modules'         => array_keys( $items ),
+			'options_deleted' => $options_to_delete,
+			'message'         => is_array( $data ) && isset( $data['message'] )
+				? (string) $data['message']
+				: __( 'Settings reset.', 'generatepress-mcp-ability' ),
+		);
+	}
 
 	public static function cb_list_gp_elements( $input ) {
 		if ( ! post_type_exists( 'gp_elements' ) ) {
@@ -770,6 +947,59 @@ class GP {
 	}
 
 	/**
+	 * Schema for the "header" (hero) element settings.
+	 *
+	 * This is the Elements hero, NOT the legacy Page Header module — the
+	 * two are separate systems and the legacy one has its own verbs in
+	 * abilities-page-header.php. A hero lives on a gp_elements post whose
+	 * _generate_element_type is "header".
+	 */
+	private static function header_settings_schema(): array {
+		$props = array();
+		foreach ( Plugin::GP_ELEMENT_HEADER_FIELDS as $key => $spec ) {
+			$zero          = in_array( $key, Plugin::GP_ELEMENT_HERO_ZERO_KEYS, true );
+			$props[ $key ] = array(
+				'type'        => array( 'string', 'integer', 'boolean', 'null' ),
+				'description' => sprintf(
+					/* translators: 1: WordPress meta key, 2: value kind, 3: extra note */
+					__( 'Maps to %1$s (%2$s).%3$s', 'generatepress-mcp-ability' ),
+					$spec[0],
+					$spec[1],
+					$zero ? __( ' A literal "0" is preserved here (GP keeps zero mobile padding on purpose).', 'generatepress-mcp-ability' ) : ''
+				),
+			);
+		}
+		return array(
+			'type'                 => 'object',
+			'description'          => 'Hero settings (type "header" only). An empty string removes a field, and so does "0" except for the four mobile padding fields GP itself special-cases — the response reports new: null for anything removed.',
+			'properties'           => $props,
+			'additionalProperties' => false,
+		);
+	}
+
+	/**
+	 * Reads hero settings. Absent metas come back as empty strings, which
+	 * is exactly how GP's own GeneratePress_Hero::get_options() reads them.
+	 */
+	private static function read_header_settings( int $post_id ): array {
+		return Plugin::read_meta_fields( $post_id, Plugin::GP_ELEMENT_HEADER_FIELDS );
+	}
+
+	/**
+	 * Writes hero settings through the shared meta writer, which mirrors
+	 * GP's own empty-equals-delete contract and reports {old,new} honestly
+	 * (new: null when a field was removed).
+	 */
+	private static function write_header_settings( int $post_id, array $settings ) {
+		return Plugin::write_meta_fields(
+			$post_id,
+			Plugin::GP_ELEMENT_HEADER_FIELDS,
+			$settings,
+			Plugin::GP_ELEMENT_HERO_ZERO_KEYS
+		);
+	}
+
+	/**
 	 * Refuses block_type on a non-block element (and layout_settings on a
 	 * non-layout one) instead of accepting it and quietly doing nothing.
 	 * GP Premium only ever reads those metas for their own element type,
@@ -798,7 +1028,70 @@ class GP {
 				)
 			);
 		}
+		if ( isset( $input['header_settings'] ) && 'header' !== $type ) {
+			return new \WP_Error(
+				'header_settings_not_applicable',
+				sprintf(
+					/* translators: %s: the element's actual type */
+					__( 'header_settings only applies to a "header" (hero) element, but this one is "%s". GP Premium only saves those metas for the header type, so setting them here would change nothing. The legacy Page Header module is a separate system with its own abilities.', 'generatepress-mcp-ability' ),
+					$type
+				)
+			);
+		}
+		if ( ( isset( $input['editor_width'] ) || isset( $input['editor_width_unit'] ) ) && 'block' !== $type ) {
+			return new \WP_Error(
+				'editor_width_not_applicable',
+				sprintf(
+					/* translators: %s: the element's actual type */
+					__( 'editor_width only applies to a "block" element, but this one is "%s". GP Premium registers those metas for block elements only.', 'generatepress-mcp-ability' ),
+					$type
+				)
+			);
+		}
 		return true;
+	}
+
+	/**
+	 * Element metas that are not type-scoped: the block editor width pair
+	 * (block elements only, enforced above) and the Polylang flag.
+	 *
+	 * NOTE ON THE LANGUAGE FLAG: despite GP Premium shipping a
+	 * wpml-config.xml, there is no WPML integration in its PHP at all —
+	 * this meta is read by its Polylang handling
+	 * (elements/elements.php:127-140), and its metabox row only appears
+	 * when pll_get_post_language() exists. Calling it a "WPML flag" was a
+	 * factory-side mistake corrected on 2026-08-09.
+	 */
+	const GP_ELEMENT_EXTRA_FIELDS = array(
+		'editor_width'      => array( '_generate_block_element_editor_width', 'int' ),
+		'editor_width_unit' => array( '_generate_block_element_editor_width_unit', 'text' ),
+		'ignore_languages'  => array( '_generate_element_ignore_languages', 'key' ),
+	);
+
+	/**
+	 * Writes whichever of GP_ELEMENT_EXTRA_FIELDS are present in $input.
+	 *
+	 * ignore_languages arrives as a boolean but GP stores its own sentinel
+	 * string 'true' (elements/class-metabox.php:1880-1890) and deletes the
+	 * meta otherwise, so we translate rather than storing "1" — a value
+	 * its reader (elements/elements.php:127-140) would not match.
+	 *
+	 * @return array|\WP_Error Map of field => {old, new} for changed fields.
+	 */
+	private static function write_extra_element_fields( int $post_id, $input ) {
+		$values = array();
+		foreach ( array_keys( self::GP_ELEMENT_EXTRA_FIELDS ) as $key ) {
+			if ( ! isset( $input[ $key ] ) ) {
+				continue;
+			}
+			$values[ $key ] = 'ignore_languages' === $key
+				? ( ! empty( $input[ $key ] ) ? 'true' : '' )
+				: $input[ $key ];
+		}
+		if ( ! $values ) {
+			return array();
+		}
+		return Plugin::write_meta_fields( $post_id, self::GP_ELEMENT_EXTRA_FIELDS, $values );
 	}
 
 	/**
@@ -839,6 +1132,10 @@ class GP {
 			'hook_priority'      => '' === get_post_meta( $post->ID, '_generate_hook_priority', true ) ? null : (int) get_post_meta( $post->ID, '_generate_hook_priority', true ),
 			'block_type'         => (string) get_post_meta( $post->ID, '_generate_block_type', true ),
 			'layout_settings'    => self::read_layout_settings( $post->ID ),
+			'header_settings'    => 'header' === $type ? self::read_header_settings( $post->ID ) : null,
+			'editor_width'       => '' === get_post_meta( $post->ID, '_generate_block_element_editor_width', true ) ? null : (int) get_post_meta( $post->ID, '_generate_block_element_editor_width', true ),
+			'editor_width_unit'  => (string) get_post_meta( $post->ID, '_generate_block_element_editor_width_unit', true ),
+			'ignore_languages'   => 'true' === (string) get_post_meta( $post->ID, '_generate_element_ignore_languages', true ),
 			'internal_notes'     => (string) get_post_meta( $post->ID, '_generate_element_internal_notes', true ),
 			'modified'           => $post->post_modified,
 		);
@@ -985,6 +1282,20 @@ class GP {
 		if ( 'layout' === $type && isset( $input['layout_settings'] ) ) {
 			self::write_layout_settings( $post_id, (array) $input['layout_settings'] );
 		}
+		if ( 'header' === $type && isset( $input['header_settings'] ) ) {
+			$hero_written = self::write_header_settings( $post_id, (array) $input['header_settings'] );
+			if ( is_wp_error( $hero_written ) ) {
+				// Same rationale as create-page-header: a rejected field
+				// must not leave a half-built element behind.
+				wp_delete_post( $post_id, true );
+				return $hero_written;
+			}
+		}
+		$extra_written = self::write_extra_element_fields( $post_id, $input );
+		if ( is_wp_error( $extra_written ) ) {
+			wp_delete_post( $post_id, true );
+			return $extra_written;
+		}
 		if ( 'hook' === $type ) {
 			update_post_meta( $post_id, '_generate_hook', wp_slash( (string) $input['hook_name'] ) );
 			update_post_meta( $post_id, '_generate_hook_priority', isset( $input['hook_priority'] ) ? (int) $input['hook_priority'] : 10 );
@@ -1082,6 +1393,20 @@ class GP {
 				$updated['layout_settings'] = $layout_changed;
 			}
 		}
+		if ( isset( $input['header_settings'] ) ) {
+			$hero_changed = self::write_header_settings( $post->ID, (array) $input['header_settings'] );
+			if ( is_wp_error( $hero_changed ) ) {
+				return $hero_changed;
+			}
+			if ( $hero_changed ) {
+				$updated['header_settings'] = $hero_changed;
+			}
+		}
+		$extra_changed = self::write_extra_element_fields( $post->ID, $input );
+		if ( is_wp_error( $extra_changed ) ) {
+			return $extra_changed;
+		}
+		$updated = array_merge( $updated, $extra_changed );
 		foreach ( array(
 			'display_conditions' => '_generate_element_display_conditions',
 			'exclude_conditions' => '_generate_element_exclude_conditions',
