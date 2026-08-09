@@ -3,7 +3,7 @@
  * Plugin Name: GeneratePress MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/generatepress-mcp-ability
  * Description: GeneratePress ecosystem abilities for MCP. Theme settings, GP Premium module status, GP Elements (full CRUD), GenerateBlocks settings, global styles (full CRUD) and Pro pattern libraries. Components are detected at runtime; abilities of missing components are simply not registered.
- * Version: 1.3.6
+ * Version: 1.3.7
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -387,6 +387,45 @@ class Plugin {
 			);
 		}
 		return $id;
+	}
+
+	/**
+	 * Wipes GenerateBlocks' server-side dynamic CSS cache so every page's
+	 * CSS is regenerated on its next front-end load.
+	 *
+	 * GenerateBlocks compiles per-page CSS and records which pages are
+	 * "current" in the generateblocks_dynamic_css_posts option, keyed on
+	 * the VIEWED page's id (never the id of an element/reusable block that
+	 * merely supplies content to that page). Its own invalidation only
+	 * covers a plain post/page edit:
+	 *   - GB core's save_post hook unsets the saved post's OWN id and only
+	 *     reads post_content — fine for a normal page edit (verified: a
+	 *     wp-core-mcp update-post write is already invalidated correctly).
+	 *   - GB Pro's save_post_gblocks_global_style hook full-wipes on global
+	 *     style saves — so our global-style verbs are already covered too.
+	 * But a GP Element (content in postmeta, displayed site-wide via a
+	 * hook) and a GenerateBlocks global SETTING change render across many
+	 * pages without living in their post_content, and GP Premium's own
+	 * element-invalidation lives inside its classic-metabox save() handler
+	 * behind a $_POST nonce a programmatic write never sends — so an API
+	 * write leaves those pages' cached CSS stale (found on a live site
+	 * 2026-08-09: a GP Element header icon rendered at the wrong size
+	 * until the cache was cleared). A full wipe is the honest lever here —
+	 * a site-wide element's host pages can't be cheaply enumerated, and it
+	 * is exactly what GP Premium itself falls back to for a broad ("entire
+	 * site") display condition and what GB Pro does for global styles.
+	 * Regeneration is lazy (per page, on next visit), so the cost is
+	 * spread out. Returns true if the cache actually held entries (so a
+	 * caller can report whether a flush happened); a no-op when empty.
+	 * See docs/KOPRU-EKSIKLERI.md.
+	 */
+	public static function flush_gb_css_cache(): bool {
+		$current = get_option( 'generateblocks_dynamic_css_posts', array() );
+		if ( empty( $current ) ) {
+			return false;
+		}
+		update_option( 'generateblocks_dynamic_css_posts', array() );
+		return true;
 	}
 
 	public static function permission_edit_posts( $input = null ): bool {

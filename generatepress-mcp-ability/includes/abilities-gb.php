@@ -585,6 +585,12 @@ class GB {
 
 		$new = generateblocks_get_option( $key );
 
+		// A settings change (e.g. container_width, css_print_method) can
+		// alter the compiled CSS of every page, but writing the option
+		// fires no post save, so nothing invalidates GB's cache on its
+		// own. See Plugin::flush_gb_css_cache()'s docblock.
+		Plugin::flush_gb_css_cache();
+
 		return array(
 			'key' => $key,
 			'old' => $old,
@@ -595,7 +601,10 @@ class GB {
 	public static function cb_regenerate_gb_css() {
 		$old = get_option( 'generateblocks_dynamic_css_posts', array() );
 
-		update_option( 'generateblocks_dynamic_css_posts', array() );
+		// Same full-wipe lever the element/settings verbs now call
+		// automatically; here it is the whole point of the verb, exposed
+		// for manual use. See Plugin::flush_gb_css_cache().
+		Plugin::flush_gb_css_cache();
 
 		$new = get_option( 'generateblocks_dynamic_css_posts', array() );
 

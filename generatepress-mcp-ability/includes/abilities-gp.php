@@ -708,6 +708,11 @@ class GP {
 			);
 		}
 
+		// Publishing/unpublishing an element adds or removes it from the
+		// pages it renders on — invalidate their cached CSS. See
+		// Plugin::flush_gb_css_cache()'s docblock.
+		Plugin::flush_gb_css_cache();
+
 		return array(
 			'element_id' => (int) $post->ID,
 			'old'        => $old,
@@ -732,6 +737,12 @@ class GP {
 		if ( ! $result ) {
 			return new \WP_Error( 'delete_failed', __( 'The element could not be deleted.', 'generatepress-mcp-ability' ) );
 		}
+
+		// Removing an element changes the pages it used to render on. See
+		// Plugin::flush_gb_css_cache()'s docblock. (wp_trash_post fires
+		// save_post, but GB's handler only touches the element's OWN id,
+		// not its host pages — so we still need this.)
+		Plugin::flush_gb_css_cache();
 
 		return array(
 			'element_id' => (int) $post->ID,
@@ -808,6 +819,11 @@ class GP {
 		if ( isset( $input['internal_notes'] ) ) {
 			update_post_meta( $post_id, '_generate_element_internal_notes', wp_slash( sanitize_textarea_field( (string) $input['internal_notes'] ) ) );
 		}
+
+		// A new element renders across pages GB has already cached; GP
+		// Premium's own cache invalidation is nonce-gated and never runs
+		// for an API write. See Plugin::flush_gb_css_cache()'s docblock.
+		Plugin::flush_gb_css_cache();
 
 		return self::cb_get_gp_element( array( 'element_id' => $post_id ) );
 	}
@@ -895,6 +911,11 @@ class GP {
 		if ( empty( $updated ) ) {
 			return new \WP_Error( 'no_fields', __( 'Provide at least one field to change.', 'generatepress-mcp-ability' ) );
 		}
+
+		// Editing an element changes the CSS of every page it renders on;
+		// see Plugin::flush_gb_css_cache()'s docblock for why an API write
+		// leaves those pages stale otherwise.
+		Plugin::flush_gb_css_cache();
 
 		return array(
 			'element_id' => (int) $post->ID,
