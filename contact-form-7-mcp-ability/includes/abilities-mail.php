@@ -262,6 +262,7 @@ class Mail {
 		$properties[ $template ] = $current;
 		$form->set_properties( $properties );
 		$form->save();
+		Plugin::refresh_config_validation( $form );
 
 		return array(
 			'id'       => $form->id(),
@@ -297,6 +298,7 @@ class Mail {
 		$properties['messages']   = $messages;
 		$form->set_properties( $properties );
 		$form->save();
+		Plugin::refresh_config_validation( $form );
 
 		return array(
 			'id'  => $form->id(),
@@ -358,6 +360,7 @@ class Mail {
 		$properties['additional_settings'] = $new;
 		$form->set_properties( $properties );
 		$form->save();
+		Plugin::refresh_config_validation( $form );
 
 		return array(
 			'id'  => $form->id(),

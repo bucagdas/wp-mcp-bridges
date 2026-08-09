@@ -374,6 +374,7 @@ class Forms {
 		$form->set_properties( $properties );
 
 		$id = $form->save();
+		Plugin::refresh_config_validation( $form );
 		if ( ! $id ) {
 			return new \WP_Error( 'create_failed', __( 'The form could not be created.', 'contact-form-7-mcp-ability' ) );
 		}
@@ -405,6 +406,7 @@ class Forms {
 		}
 
 		$form->save();
+		Plugin::refresh_config_validation( $form );
 
 		return array(
 			'id'      => $form->id(),
@@ -444,6 +446,7 @@ class Forms {
 
 		$copy = $form->copy();
 		$id   = $copy->save();
+		Plugin::refresh_config_validation( $copy );
 		if ( ! $id ) {
 			return new \WP_Error( 'duplicate_failed', __( 'The form could not be duplicated.', 'contact-form-7-mcp-ability' ) );
 		}
@@ -488,6 +491,7 @@ class Forms {
 		$properties['form'] = (string) $input['form'];
 		$form->set_properties( $properties );
 		$form->save();
+		Plugin::refresh_config_validation( $form );
 
 		return array(
 			'id'  => $form->id(),

@@ -3,7 +3,7 @@
  * Plugin Name: Contact Form 7 MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/contact-form-7-mcp-ability
  * Description: Full-coverage Contact Form 7 abilities for MCP. Form CRUD, form tags, mail templates, messages, additional settings, config validation, status and test submission.
- * Version: 1.0.4
+ * Version: 1.0.5
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -100,6 +100,46 @@ class Plugin {
 			return new \WP_Error( 'form_not_found', __( 'No contact form exists with the given ID.', 'contact-form-7-mcp-ability' ) );
 		}
 		return $form;
+	}
+
+	/**
+	 * Recomputes and PERSISTS Contact Form 7's configuration-validation
+	 * result for a form, after this bridge has written to it.
+	 *
+	 * CF7 stores the validator's findings in the _config_validation
+	 * postmeta and reads them back on the Contact Forms admin screens to
+	 * show the "this form has configuration errors" warnings. But
+	 * WPCF7_ContactForm::save() — which is what every write verb here
+	 * ends with, and what wpcf7_save_contact_form() calls — never runs
+	 * the validator. Only CF7's own REST endpoints and its classic
+	 * admin POST handler do (they call validate() then save() explicitly).
+	 *
+	 * So a form edited through this bridge kept whatever validation
+	 * state it had before. Measured 2026-08-09: writing a mail template
+	 * that references a form-tag which does not exist left the live
+	 * validator reporting 1 error while _config_validation stayed empty —
+	 * i.e. wp-admin showed a CLEAN form that was actually broken. That is
+	 * the dangerous direction of the staleness: stale errors would merely
+	 * annoy, a stale "all good" hides a form whose mail will not send.
+	 *
+	 * We run CF7's own WPCF7_ConfigValidator and call its own save(),
+	 * rather than writing the meta ourselves. Note this also CLEARS the
+	 * meta when a form becomes valid again (CF7's save() removes it when
+	 * there are no errors), so it fixes staleness in both directions.
+	 *
+	 * validate-form deliberately does NOT call this: it is annotated
+	 * readonly and returns the live result, so persisting from there
+	 * would make a read verb write. See docs/KOPRU-EKSIKLERI.md madde 16.
+	 *
+	 * @param \WPCF7_ContactForm|mixed $form Saved form object.
+	 */
+	public static function refresh_config_validation( $form ): void {
+		if ( ! class_exists( '\WPCF7_ConfigValidator' ) || ! ( $form instanceof \WPCF7_ContactForm ) ) {
+			return;
+		}
+		$validator = new \WPCF7_ConfigValidator( $form );
+		$validator->validate();
+		$validator->save();
 	}
 
 	/**
