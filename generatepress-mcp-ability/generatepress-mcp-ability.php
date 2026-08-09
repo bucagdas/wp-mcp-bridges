@@ -3,7 +3,7 @@
  * Plugin Name: GeneratePress MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/generatepress-mcp-ability
  * Description: GeneratePress ecosystem abilities for MCP. Theme settings, GP Premium module status, GP Elements (full CRUD), GenerateBlocks settings, global styles (full CRUD) and Pro pattern libraries. Components are detected at runtime; abilities of missing components are simply not registered.
- * Version: 1.3.8
+ * Version: 1.3.9
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -544,6 +544,66 @@ class Plugin {
 		}
 		update_option( 'generateblocks_dynamic_css_posts', array() );
 		return true;
+	}
+
+	/**
+	 * Invalidates GeneratePress' own compiled CSS after a settings write.
+	 *
+	 * GeneratePress compiles generate_settings/theme_mods into CSS and
+	 * caches the result two different ways, depending on the site's
+	 * css_print_method setting:
+	 *   - "inline": options generate_dynamic_css_output +
+	 *     generate_dynamic_css_cached_version (theme, inc/css-output.php).
+	 *   - "file": a real stylesheet at uploads/generatepress/style.min.css,
+	 *     rebuilt only when GeneratePress_External_CSS_File::needs_update()
+	 *     says so — and that only checks the updated_time stamp in the
+	 *     generatepress_dynamic_css_data option and the theme/plugin
+	 *     versions. Nothing about it looks at whether the SETTINGS changed.
+	 *
+	 * Neither cache has any hook on generate_settings being written. The
+	 * theme clears the inline cache on customize_save_after, and GP Premium
+	 * clears the file's timestamp on customize_save_after too (plus a
+	 * nonce-gated admin AJAX action) — so only a Customizer save refreshes
+	 * them. A programmatic update_option( 'generate_settings', ... ), which
+	 * is what every settings verb here does, leaves both untouched.
+	 *
+	 * Measured end to end on 2026-08-09 (file mode, real HTTP requests):
+	 * with a clean baseline, writing background_color through
+	 * update-theme-setting and then loading the front end left
+	 * style.min.css byte-identical and missing the new colour entirely.
+	 * Calling delete_saved_time() and loading the front end again rebuilt
+	 * it correctly. See docs/KOPRU-EKSIKLERI.md madde 16.
+	 *
+	 * We call GeneratePress' OWN invalidation for each mode rather than
+	 * writing the file ourselves; regeneration stays lazy (next front-end
+	 * request), exactly as GeneratePress designed it — same shape as the
+	 * GenerateBlocks flush above.
+	 *
+	 * @return string[] Which caches were actually invalidated.
+	 */
+	public static function flush_theme_css_cache(): array {
+		$flushed = array();
+
+		// Inline mode: the theme's own cached CSS + its version stamp.
+		if ( false !== get_option( 'generate_dynamic_css_output', false )
+			|| false !== get_option( 'generate_dynamic_css_cached_version', false ) ) {
+			delete_option( 'generate_dynamic_css_output' );
+			delete_option( 'generate_dynamic_css_cached_version' );
+			$flushed[] = 'inline';
+		}
+
+		// File mode: GP Premium's external stylesheet. Clearing the saved
+		// time is what makes needs_update() true; the file itself is
+		// rewritten on the next front-end request.
+		if ( class_exists( 'GeneratePress_External_CSS_File' ) ) {
+			$css_file = \GeneratePress_External_CSS_File::get_instance();
+			if ( method_exists( $css_file, 'delete_saved_time' ) ) {
+				$css_file->delete_saved_time();
+				$flushed[] = 'file';
+			}
+		}
+
+		return $flushed;
 	}
 
 	public static function permission_edit_posts( $input = null ): bool {

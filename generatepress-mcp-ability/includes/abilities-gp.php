@@ -550,6 +550,11 @@ class GP {
 		$old              = array_key_exists( $key, $settings ) ? $settings[ $key ] : null;
 		$settings[ $key ] = $input['value'];
 		update_option( $option_name, $settings );
+		// Several GP Premium module settings (spacing, backgrounds,
+		// secondary nav, ...) feed the compiled theme CSS, and none of
+		// these options has a hook on it — see
+		// Plugin::flush_theme_css_cache()'s docblock.
+		Plugin::flush_theme_css_cache();
 
 		$readback = get_option( $option_name, array() );
 		$new      = is_array( $readback ) && array_key_exists( $key, $readback ) ? $readback[ $key ] : null;

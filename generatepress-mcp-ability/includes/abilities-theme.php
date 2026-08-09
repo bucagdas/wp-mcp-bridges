@@ -538,6 +538,9 @@ class Theme {
 		$saved         = (array) get_option( 'generate_settings', array() );
 		$saved[ $key ] = $input['value'];
 		update_option( 'generate_settings', $saved );
+		// GeneratePress caches the compiled CSS and has no hook on this
+		// option — see Plugin::flush_theme_css_cache()'s docblock.
+		Plugin::flush_theme_css_cache();
 
 		$new = self::effective_theme_settings()[ $key ] ?? null;
 
@@ -564,6 +567,7 @@ class Theme {
 		$saved = (array) get_option( 'generate_settings', array() );
 		unset( $saved[ $key ] );
 		update_option( 'generate_settings', $saved );
+		Plugin::flush_theme_css_cache();
 
 		$new = self::effective_theme_settings()[ $key ] ?? null;
 
@@ -662,6 +666,8 @@ class Theme {
 				break;
 			}
 		}
+
+		Plugin::flush_theme_css_cache();
 
 		return array(
 			'slug' => $slug,
@@ -770,12 +776,17 @@ class Theme {
 	public static function cb_clear_theme_css_cache() {
 		$old = (string) get_option( 'generate_dynamic_css_cached_version', '' );
 
-		delete_option( 'generate_dynamic_css_output' );
-		delete_option( 'generate_dynamic_css_cached_version' );
+		// Until 2026-08-09 this only deleted the two INLINE-mode options,
+		// which meant that on a site using css_print_method "file" — the
+		// GeneratePress default — this verb reported success while the
+		// stylesheet actually being served (uploads/generatepress/
+		// style.min.css) was left untouched. Both modes are handled now.
+		$flushed = Plugin::flush_theme_css_cache();
 
 		return array(
-			'old' => $old,
-			'new' => (string) get_option( 'generate_dynamic_css_cached_version', '' ),
+			'old'     => $old,
+			'new'     => (string) get_option( 'generate_dynamic_css_cached_version', '' ),
+			'flushed' => $flushed,
 		);
 	}
 
@@ -864,6 +875,8 @@ class Theme {
 		} else {
 			set_theme_mod( $key, (string) $input['value'] );
 		}
+
+		Plugin::flush_theme_css_cache();
 
 		return array(
 			'key' => $key,
@@ -970,6 +983,10 @@ class Theme {
 				'old'     => $old,
 				'new'     => $value,
 			);
+		}
+
+		if ( ! $dry_run ) {
+			Plugin::flush_theme_css_cache();
 		}
 
 		return array(
