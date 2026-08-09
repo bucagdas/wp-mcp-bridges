@@ -3,7 +3,7 @@
  * Plugin Name: Rank Math MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/rank-math-mcp-ability
  * Description: Full-coverage Rank Math SEO abilities for MCP. Per-post SEO metadata (core, robots, social, schema), settings, redirections, 404 monitor, sitemap tools, module toggling and analytics status.
- * Version: 2.0.3
+ * Version: 2.0.4
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -67,6 +67,9 @@ class Plugin {
 	public static function init(): void {
 		add_action( 'wp_abilities_api_categories_init', array( __CLASS__, 'register_category' ) );
 		add_action( 'wp_abilities_api_init', array( __CLASS__, 'register_abilities' ) );
+		// Late enough that Rank Math's own modules have booted and we can
+		// see whether it registered its watcher for this request.
+		add_action( 'wp_loaded', array( __CLASS__, 'register_sitemap_cache_watcher' ), 20 );
 	}
 
 	public static function register_category(): void {
@@ -168,6 +171,122 @@ class Plugin {
 		$table = $wpdb->prefix . $suffix;
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		return $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) ? $table : null;
+	}
+
+	// ---------------------------------------------------------------------
+	// Sitemap cache invalidation for non-admin writes
+	// ---------------------------------------------------------------------
+
+	/** True once we've attached our shutdown drain, so we only add it once. */
+	private static $sitemap_drain_registered = false;
+
+	/**
+	 * Rank Math only invalidates its sitemap cache when it is running in
+	 * wp-admin or WP-Cron. Its class-sitemap.php does:
+	 *
+	 *     if ( is_admin() || wp_doing_cron() ) { new Cache_Watcher(); }
+	 *
+	 * Cache_Watcher is the ONLY thing that registers the save_post /
+	 * transition_post_status / term / author / shutdown hooks that clear
+	 * the cached sitemap XML. So for any write that happens outside those
+	 * two contexts — a REST request (which is how this bridge, and how
+	 * the block editor itself, saves), or WP-CLI — the hooks are never
+	 * registered at all and the cache is never invalidated. The guard is
+	 * on REGISTRATION, not inside the callback, so a perfectly ordinary
+	 * wp_insert_post() cannot possibly trigger it.
+	 *
+	 * Verified on a live site (2026-08-09) end to end over HTTP: with the
+	 * cache warm, creating 3 posts through the bridge left /post-sitemap.xml
+	 * serving the old 4 URLs; after invalidating, the same URL returned 7.
+	 * This matches the field report (69 pages created, sitemap stuck at 2
+	 * URLs for two days). Rank Math's own Redirections module gets this
+	 * right one file over — its watcher gate is
+	 * `is_admin() || Helper::is_rest()` — so this is a gap in the Sitemap
+	 * module specifically, not an intentional design.
+	 *
+	 * We therefore register the same hooks ourselves when Rank Math has
+	 * not, and route them to Rank Math's OWN public invalidation methods
+	 * rather than inventing our own cache-clearing logic:
+	 *   - Cache_Watcher::invalidate_object_type( 'post'|'term'|'user', $id )
+	 *     dispatches to invalidate_post/invalidate_term/invalidate_author,
+	 *     each of which honours Rank Math's own rules (skips revisions,
+	 *     respects the per-taxonomy tax_<tax>_sitemap setting, ...).
+	 *   - Those only QUEUE the affected types into a static array; the
+	 *     queue is drained by Cache_Watcher::clear_queued(), which Rank
+	 *     Math normally attaches to `shutdown`. Since that attachment is
+	 *     part of the registration we're standing in for, we attach it too
+	 *     — this is also what gives us free coalescing: N writes in one
+	 *     request produce exactly one storage invalidation.
+	 *
+	 * Deliberately NOT debounced across requests. Measured on this install:
+	 * invalidating a warm cache costs 1.78 ms, and invalidating an already
+	 * empty one costs 0.415 ms — and after the first invalidation of a
+	 * batch the cache stays empty (nothing re-populates it until someone
+	 * actually requests the sitemap), so a 69-page bulk run costs about
+	 * 30 ms in total. A cron- or timestamp-based debounce would add a
+	 * staleness window and moving parts to save that. See
+	 * docs/KOPRU-EKSIKLERI.md madde 15.
+	 */
+	public static function register_sitemap_cache_watcher(): void {
+		// Rank Math already registered its own watcher for this request.
+		if ( is_admin() || wp_doing_cron() ) {
+			return;
+		}
+		if ( ! class_exists( '\RankMath\Sitemap\Cache_Watcher' ) || ! self::is_module_active( 'sitemap' ) ) {
+			return;
+		}
+
+		add_action( 'save_post', array( __CLASS__, 'sitemap_invalidate_post' ), 10, 2 );
+		add_action( 'deleted_post', array( __CLASS__, 'sitemap_invalidate_post' ), 10, 1 );
+		add_action( 'edited_term', array( __CLASS__, 'sitemap_invalidate_term' ), 10, 3 );
+		add_action( 'created_term', array( __CLASS__, 'sitemap_invalidate_term' ), 10, 3 );
+		add_action( 'delete_term', array( __CLASS__, 'sitemap_invalidate_term' ), 10, 3 );
+		add_action( 'profile_update', array( __CLASS__, 'sitemap_invalidate_user' ), 10, 1 );
+		add_action( 'user_register', array( __CLASS__, 'sitemap_invalidate_user' ), 10, 1 );
+		add_action( 'delete_user', array( __CLASS__, 'sitemap_invalidate_user' ), 10, 1 );
+	}
+
+	/**
+	 * Queues the drain exactly once, the first time something is actually
+	 * invalidated — so a request that writes nothing adds no shutdown work.
+	 */
+	private static function queue_sitemap_drain(): void {
+		if ( self::$sitemap_drain_registered ) {
+			return;
+		}
+		self::$sitemap_drain_registered = true;
+		add_action( 'shutdown', array( '\RankMath\Sitemap\Cache_Watcher', 'clear_queued' ) );
+	}
+
+	public static function sitemap_invalidate_post( $post_id, $post = null ): void {
+		$post = $post ? $post : get_post( $post_id );
+		// Mirrors Rank Math's own Cache_Watcher::save_post() guards: an
+		// auto-draft or a password-protected post is not in the sitemap,
+		// so invalidating for it would be pure noise. Revisions are
+		// filtered by invalidate_post() itself.
+		if ( $post && ( 'auto-draft' === $post->post_status || '' !== (string) $post->post_password ) ) {
+			return;
+		}
+		\RankMath\Sitemap\Cache_Watcher::invalidate_object_type( 'post', (int) $post_id );
+		self::queue_sitemap_drain();
+	}
+
+	public static function sitemap_invalidate_term( $term_id, $tt_id = 0, $taxonomy = '' ): void {
+		// invalidate_object_type('term', ...) re-reads the term to find its
+		// taxonomy, which fails on delete_term (the term is already gone) —
+		// so call the taxonomy-aware method directly with what the hook
+		// hands us. It still honours the tax_<taxonomy>_sitemap setting.
+		if ( $taxonomy ) {
+			\RankMath\Sitemap\Cache_Watcher::invalidate_term( $term_id, $taxonomy );
+		} else {
+			\RankMath\Sitemap\Cache_Watcher::invalidate_object_type( 'term', (int) $term_id );
+		}
+		self::queue_sitemap_drain();
+	}
+
+	public static function sitemap_invalidate_user( $user_id ): void {
+		\RankMath\Sitemap\Cache_Watcher::invalidate_object_type( 'user', (int) $user_id );
+		self::queue_sitemap_drain();
 	}
 
 	// ---------------------------------------------------------------------
