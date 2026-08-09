@@ -1,16 +1,16 @@
 {
     "name": "Contact Form 7 MCP Ability",
     "slug": "contact-form-7-mcp-ability",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "author": "bucagdas",
     "homepage": "https://github.com/bucagdas/wp-mcp-bridges/tree/main/contact-form-7-mcp-ability",
     "requires": "7.0",
     "tested": "7.0",
     "requires_php": "8.0",
-    "download_url": "https://github.com/bucagdas/wp-mcp-bridges/releases/download/contact-form-7-mcp-ability-v1.0.4/contact-form-7-mcp-ability.zip",
-    "last_updated": "2026-08-08 14:25:31",
+    "download_url": "https://github.com/bucagdas/wp-mcp-bridges/releases/download/contact-form-7-mcp-ability-v1.0.5/contact-form-7-mcp-ability.zip",
+    "last_updated": "2026-08-09 08:53:04",
     "sections": {
         "description": "Full-coverage Contact Form 7 abilities for MCP. Form CRUD, form tags, mail templates, messages, additional settings, config validation, status and test submission.",
-        "changelog": "<h4>1.0.4</h4><ul><li>Fixed the MCP Adapter's execute-ability tool masking schema errors as a generic \"Permission denied\": permission_read_form, permission_edit_form and permission_delete_form now return a clear WP_Error when the expected id parameter is missing or invalid, instead of silently defaulting to 0. No parameter name changed \u2014 form abilities already used id consistently.</li></ul><h4>1.0.3</h4><ul><li>Security audit: SENSITIVE_PATTERN's bare auth substring was matching author-related field names, causing unnecessary over-redaction. Narrowed to authoriz \u2014 still catches authorization, no longer catches author. No other findings on this bridge's write surface (WPCF7_ContactForm::save() already protects its own writes).</li></ul><h4>1.0.2</h4><ul><li>Distribution pipeline test release \u2014 no functional changes.</li></ul><h4>1.0.1</h4><ul><li>Added self-hosted update checker (plugin-update-checker, vendored).</li><li>Added GPLv2-or-later license header.</li><li>Updated Plugin URI to the new public monorepo.</li></ul>"
+        "changelog": "<h4>1.0.5</h4><ul><li>Contact Form 7's configuration validation is now refreshed after every write. Previously a form broken through this bridge kept showing a clean validation state in wp-admin.</li><li>Uses CF7's own WPCF7_ConfigValidator, so the warning also clears again once a form becomes valid.</li></ul><h4>1.0.4</h4><ul><li>Fixed the MCP Adapter's execute-ability tool masking schema errors as a generic \"Permission denied\": permission_read_form, permission_edit_form and permission_delete_form now return a clear WP_Error when the expected id parameter is missing or invalid, instead of silently defaulting to 0. No parameter name changed \u2014 form abilities already used id consistently.</li></ul><h4>1.0.3</h4><ul><li>Security audit: SENSITIVE_PATTERN's bare auth substring was matching author-related field names, causing unnecessary over-redaction. Narrowed to authoriz \u2014 still catches authorization, no longer catches author. No other findings on this bridge's write surface (WPCF7_ContactForm::save() already protects its own writes).</li></ul><h4>1.0.2</h4><ul><li>Distribution pipeline test release \u2014 no functional changes.</li></ul><h4>1.0.1</h4><ul><li>Added self-hosted update checker (plugin-update-checker, vendored).</li><li>Added GPLv2-or-later license header.</li><li>Updated Plugin URI to the new public monorepo.</li></ul>"
     }
 }
