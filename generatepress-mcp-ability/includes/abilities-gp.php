@@ -260,7 +260,7 @@ class GP {
 				'generatepress-mcp/create-gp-element',
 				array(
 					'label'               => __( 'Create a GP Element', 'generatepress-mcp-ability' ),
-					'description'         => __( 'Creates a new GP Premium Element. type is required (hook, layout, header or block); title and content are recommended. For type "hook", hook_name is required and hook_priority is optional (default 10); display_conditions defaults to the entire site if omitted, since an element with no display rule never renders anywhere. Content is validated before saving: block-comment markup must parse as valid blocks. If the acting user has unfiltered_html, raw content is accepted as-is (same as wp-admin); otherwise it must pass kses (extended with a safe inline-SVG tag/attribute whitelist — script/foreignObject/event-handler attributes stay rejected). Set dry_run: true to run validation only, without creating anything: on dry_run, invalid content never errors — it returns {dry_run:true, valid:false, reason} where reason names exactly what sanitization would change (which tag(s) were dropped entirely, which attribute(s) were dropped from which tag, or the first differing character), not just "content changed". A real (non-dry_run) write with invalid content still fails with that same detail in the error message. New elements default to status "draft"; creating directly with status "publish" additionally requires the publish_posts capability (checked before creation — gp_elements has no post ID yet at this point, so this is the site-wide capability rather than the per-post one update-gp-element-status uses). Never sets the PHP-execution hook flag — that remains a wp-admin-only, code-writing operation outside this bridge\'s scope.', 'generatepress-mcp-ability' ),
+					'description'         => __( 'Creates a new GP Premium Element. type is required (hook, layout, header or block); title and content are recommended. For type "hook", hook_name is required and hook_priority is optional (default 10); display_conditions defaults to the entire site if omitted, since an element with no display rule never renders anywhere. Content is validated before saving: block-comment markup must parse as valid blocks. If the acting user has unfiltered_html, raw content is accepted as-is (same as wp-admin); otherwise it must pass kses (extended with a safe inline-SVG tag/attribute whitelist — script/foreignObject/event-handler attributes stay rejected). Set dry_run: true to run validation only, without creating anything: on dry_run, invalid content never errors — it returns {dry_run:true, valid:false, reason} where reason names exactly what sanitization would change (which tag(s) were dropped entirely, which attribute(s) were dropped from which tag, or the first differing character), not just "content changed". A real (non-dry_run) write with invalid content still fails with that same detail in the error message. New elements default to status "draft"; creating directly with status "publish" additionally requires the publish_posts capability (checked before creation — gp_elements has no post ID yet at this point, so this is the site-wide capability rather than the per-post one update-gp-element-status uses). For type "block", block_type selects which theme hook the element renders on (site-header, site-footer, page-hero, content-template, loop-template, post-meta-template, the navigation/sidebar templates, or search-modal) — a block element saved without it is stored but never rendered anywhere. For type "layout", layout_settings carries the layout overrides (sidebar_layout, footer_widgets, content_area, content_width and the eight disable_* toggles); omit a setting to leave it inheriting the site default, and note that footer_widgets here spells "none" as "no-widgets" (the per-post update-post-layout verb uses "0" for the theme\'s own meta — different vocabulary, same idea). Passing block_type on a non-block element, or layout_settings on a non-layout one, is refused rather than silently ignored, since GP Premium would never read it. Permission follows GP Premium\'s own Elements admin screen: the generate_elements_admin_menu_capability filter (default manage_options), honored as the site configures it. Never sets the PHP-execution hook flag — that remains a wp-admin-only, code-writing operation outside this bridge\'s scope.', 'generatepress-mcp-ability' ),
 					'category'            => Plugin::CATEGORY,
 					'input_schema'        => array(
 						'type'                 => 'object',
@@ -287,6 +287,12 @@ class GP {
 								'default'     => 10,
 								'description' => 'Hook priority (type "hook" only). Default 10.',
 							),
+							'block_type'          => array(
+								'type'        => 'string',
+								'enum'        => Plugin::GP_BLOCK_TYPES,
+								'description' => 'Block sub-type (type "block" only) — decides which theme hook the element renders on. Without it a block element is stored but never rendered.',
+							),
+							'layout_settings'     => self::layout_settings_schema(),
 							'display_conditions'  => array(
 								'type'        => 'array',
 								'description' => 'Display condition rules (GP Premium condition format).',
@@ -332,7 +338,7 @@ class GP {
 				'generatepress-mcp/update-gp-element',
 				array(
 					'label'               => __( 'Update a GP Element', 'generatepress-mcp-ability' ),
-					'description'         => __( 'Updates one or more fields of an existing GP Element: title, content, hook_name, hook_priority, display/exclude/user conditions, internal_notes. At least one field is required. Content is validated the same way as create-gp-element (kses against a safe whitelist, unfiltered_html accounts bypass it); set dry_run: true to validate without saving — on dry_run, invalid content never errors, it returns {dry_run:true, valid:false, reason} naming exactly what would change (dropped tag(s)/attribute(s), or the first differing character). This can overwrite an element\'s working configuration, so no confirm gate — instead every call reads back and returns {old,new} per changed field so the effect is always visible. Never touches the PHP-execution hook flag.', 'generatepress-mcp-ability' ),
+					'description'         => __( 'Updates one or more fields of an existing GP Element: title, content, hook_name, hook_priority, block_type, layout_settings, display/exclude/user conditions, internal_notes. At least one field is required. Content is validated the same way as create-gp-element (kses against a safe whitelist, unfiltered_html accounts bypass it); set dry_run: true to validate without saving — on dry_run, invalid content never errors, it returns {dry_run:true, valid:false, reason} naming exactly what would change (dropped tag(s)/attribute(s), or the first differing character). This can overwrite an element\'s working configuration, so no confirm gate — instead every call reads back and returns {old,new} per changed field so the effect is always visible. block_type (block elements) and layout_settings (layout elements) are editable here too — passing either on an element of the wrong type is refused rather than silently ignored, since GP Premium would never read it. Within layout_settings, omitting a key leaves it untouched, while sending an empty string / 0 / false clears the override so the element inherits the site default again. Permission follows GP Premium\'s own Elements admin screen: the generate_elements_admin_menu_capability filter (default manage_options). Never touches the PHP-execution hook flag.', 'generatepress-mcp-ability' ),
 					'category'            => Plugin::CATEGORY,
 					'input_schema'        => array(
 						'type'                 => 'object',
@@ -346,6 +352,12 @@ class GP {
 							'content'             => array( 'type' => 'string' ),
 							'hook_name'           => array( 'type' => 'string' ),
 							'hook_priority'       => array( 'type' => 'integer' ),
+							'block_type'          => array(
+								'type'        => 'string',
+								'enum'        => Plugin::GP_BLOCK_TYPES,
+								'description' => 'Block sub-type (type "block" only) — which theme hook the element renders on.',
+							),
+							'layout_settings'     => self::layout_settings_schema(),
 							'display_conditions'  => array( 'type' => 'array' ),
 							'exclude_conditions'  => array( 'type' => 'array' ),
 							'user_conditions'     => array( 'type' => 'array' ),
@@ -630,6 +642,161 @@ class GP {
 	}
 
 	/**
+	 * Input schema for a layout element's settings — shared by
+	 * create-gp-element and update-gp-element so the two cannot drift.
+	 */
+	private static function layout_settings_schema(): array {
+		return array(
+			'type'                 => 'object',
+			'description'          => 'Layout overrides (type "layout" only). Omit any key to leave it inheriting the site default.',
+			'properties'           => array(
+				'sidebar_layout'               => array(
+					'type'        => 'string',
+					'enum'        => Plugin::SIDEBAR_LAYOUTS,
+					'description' => 'Sidebar layout; empty string inherits.',
+				),
+				'footer_widgets'               => array(
+					'type'        => 'string',
+					'enum'        => Plugin::GP_ELEMENT_FOOTER_WIDGETS,
+					'description' => 'Footer widget count. "no-widgets" means none; empty string inherits. (Not the same vocabulary as update-post-layout, which uses "0".)',
+				),
+				'content_area'                 => array(
+					'type'        => 'string',
+					'enum'        => Plugin::GP_ELEMENT_CONTENT_AREAS,
+					'description' => 'Content area width mode; empty string inherits.',
+				),
+				'content_width'                => array(
+					'type'        => 'integer',
+					'minimum'     => 0,
+					'description' => 'Content width in px. 0 removes the override.',
+				),
+				'disable_site_header'          => array( 'type' => 'boolean' ),
+				'disable_mobile_header'        => array( 'type' => 'boolean' ),
+				'disable_top_bar'              => array( 'type' => 'boolean' ),
+				'disable_primary_navigation'   => array( 'type' => 'boolean' ),
+				'disable_secondary_navigation' => array( 'type' => 'boolean' ),
+				'disable_featured_image'       => array( 'type' => 'boolean' ),
+				'disable_content_title'        => array( 'type' => 'boolean' ),
+				'disable_footer'               => array( 'type' => 'boolean' ),
+			),
+			'additionalProperties' => false,
+		);
+	}
+
+	/**
+	 * Reads a layout element's settings into the ability's input-key
+	 * shape (Plugin::GP_ELEMENT_LAYOUT_FIELDS). GP spells "inherit the
+	 * site default" by DELETING the meta, so an absent meta comes back
+	 * as null (or false for the disable_* booleans) rather than ''.
+	 */
+	private static function read_layout_settings( int $post_id ): array {
+		$out = array();
+		foreach ( Plugin::GP_ELEMENT_LAYOUT_FIELDS as $in_key => $spec ) {
+			list( $meta_key, $kind ) = $spec;
+			$raw = get_post_meta( $post_id, $meta_key, true );
+
+			if ( 'bool' === $kind ) {
+				$out[ $in_key ] = ( 'true' === $raw );
+			} elseif ( 'number' === $kind ) {
+				$out[ $in_key ] = ( '' === $raw ) ? null : (int) $raw;
+			} else {
+				$out[ $in_key ] = ( '' === $raw ) ? null : (string) $raw;
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Writes layout element settings using GP Premium's own contract
+	 * (elements/class-metabox.php's $layout_values loop): sanitize_key()
+	 * for key fields, absint() for content_width, 'true' for a checked
+	 * boolean — and DELETE the meta for any falsy value, because that is
+	 * how GP represents "inherit the site default". Storing '' or '0'
+	 * instead would leave a value GP's own checks never expect.
+	 * Returns {old,new} per field actually present in $settings.
+	 */
+	private static function write_layout_settings( int $post_id, array $settings ): array {
+		$before  = self::read_layout_settings( $post_id );
+		$touched = array();
+
+		foreach ( Plugin::GP_ELEMENT_LAYOUT_FIELDS as $in_key => $spec ) {
+			if ( ! array_key_exists( $in_key, $settings ) ) {
+				continue;
+			}
+			list( $meta_key, $kind ) = $spec;
+			$value = $settings[ $in_key ];
+
+			if ( 'bool' === $kind ) {
+				$store = ! empty( $value ) ? 'true' : false;
+			} elseif ( 'number' === $kind ) {
+				$store = absint( $value );
+				$store = $store > 0 ? $store : false;
+			} else {
+				$clean = sanitize_key( (string) $value );
+				$store = '' !== $clean ? $clean : false;
+			}
+
+			if ( false === $store ) {
+				delete_post_meta( $post_id, $meta_key );
+			} else {
+				// update_post_meta() expects SLASHED data (see
+				// write_element_content()'s note). sanitize_key()/absint()
+				// output can never contain a backslash, so this is
+				// contract-uniformity rather than an active fix — kept so
+				// the rule stays consistent across every write here.
+				update_post_meta( $post_id, $meta_key, wp_slash( $store ) );
+			}
+			$touched[ $in_key ] = true;
+		}
+
+		if ( ! $touched ) {
+			return array();
+		}
+
+		$after   = self::read_layout_settings( $post_id );
+		$changed = array();
+		foreach ( array_keys( $touched ) as $in_key ) {
+			$changed[ $in_key ] = array(
+				'old' => $before[ $in_key ],
+				'new' => $after[ $in_key ],
+			);
+		}
+		return $changed;
+	}
+
+	/**
+	 * Refuses block_type on a non-block element (and layout_settings on a
+	 * non-layout one) instead of accepting it and quietly doing nothing.
+	 * GP Premium only ever reads those metas for their own element type,
+	 * so an accepted-but-ignored write would report success while
+	 * changing nothing — the same silent-no-op failure mode as the
+	 * page_header option bug (docs/KOPRU-EKSIKLERI.md madde 13).
+	 */
+	private static function validate_type_scoped_fields( string $type, $input ) {
+		if ( isset( $input['block_type'] ) && 'block' !== $type ) {
+			return new \WP_Error(
+				'block_type_not_applicable',
+				sprintf(
+					/* translators: %s: the element's actual type */
+					__( 'block_type only applies to a "block" element, but this one is "%s". GP Premium never reads _generate_block_type for other types, so setting it here would change nothing.', 'generatepress-mcp-ability' ),
+					$type
+				)
+			);
+		}
+		if ( isset( $input['layout_settings'] ) && 'layout' !== $type ) {
+			return new \WP_Error(
+				'layout_settings_not_applicable',
+				sprintf(
+					/* translators: %s: the element's actual type */
+					__( 'layout_settings only applies to a "layout" element, but this one is "%s". GP Premium never reads those metas for other types, so setting them here would change nothing.', 'generatepress-mcp-ability' ),
+					$type
+				)
+			);
+		}
+		return true;
+	}
+
+	/**
 	 * GP Premium's own wp-admin UI refuses to consider a published,
 	 * non-block element "live" without a Display Rules location (it shows
 	 * an inline warning to that effect — see class-metabox.php's
@@ -665,6 +832,8 @@ class GP {
 			'user_conditions'    => get_post_meta( $post->ID, '_generate_element_user_conditions', true ),
 			'hook_name'          => (string) get_post_meta( $post->ID, '_generate_hook', true ),
 			'hook_priority'      => '' === get_post_meta( $post->ID, '_generate_hook_priority', true ) ? null : (int) get_post_meta( $post->ID, '_generate_hook_priority', true ),
+			'block_type'         => (string) get_post_meta( $post->ID, '_generate_block_type', true ),
+			'layout_settings'    => self::read_layout_settings( $post->ID ),
 			'internal_notes'     => (string) get_post_meta( $post->ID, '_generate_element_internal_notes', true ),
 			'modified'           => $post->post_modified,
 		);
@@ -764,6 +933,11 @@ class GP {
 			return new \WP_Error( 'missing_hook_name', __( 'hook_name is required when type is "hook".', 'generatepress-mcp-ability' ) );
 		}
 
+		$scope_check = self::validate_type_scoped_fields( $type, $input );
+		if ( is_wp_error( $scope_check ) ) {
+			return $scope_check;
+		}
+
 		$content = isset( $input['content'] ) ? (string) $input['content'] : '';
 		$valid   = Plugin::validate_block_markup( $content );
 		if ( is_wp_error( $valid ) ) {
@@ -800,6 +974,12 @@ class GP {
 
 		update_post_meta( $post_id, '_generate_element_type', $type );
 		self::write_element_content( $post_id, $type, $content );
+		if ( 'block' === $type && isset( $input['block_type'] ) ) {
+			update_post_meta( $post_id, '_generate_block_type', sanitize_key( (string) $input['block_type'] ) );
+		}
+		if ( 'layout' === $type && isset( $input['layout_settings'] ) ) {
+			self::write_layout_settings( $post_id, (array) $input['layout_settings'] );
+		}
 		if ( 'hook' === $type ) {
 			update_post_meta( $post_id, '_generate_hook', wp_slash( (string) $input['hook_name'] ) );
 			update_post_meta( $post_id, '_generate_hook_priority', isset( $input['hook_priority'] ) ? (int) $input['hook_priority'] : 10 );
@@ -835,6 +1015,11 @@ class GP {
 		}
 
 		$type = (string) get_post_meta( $post->ID, '_generate_element_type', true );
+
+		$scope_check = self::validate_type_scoped_fields( $type, $input );
+		if ( is_wp_error( $scope_check ) ) {
+			return $scope_check;
+		}
 
 		if ( isset( $input['content'] ) ) {
 			$valid = Plugin::validate_block_markup( (string) $input['content'] );
@@ -880,6 +1065,17 @@ class GP {
 			$old = get_post_meta( $post->ID, '_generate_hook_priority', true );
 			update_post_meta( $post->ID, '_generate_hook_priority', (int) $input['hook_priority'] );
 			$updated['hook_priority'] = array( 'old' => $old, 'new' => get_post_meta( $post->ID, '_generate_hook_priority', true ) );
+		}
+		if ( isset( $input['block_type'] ) ) {
+			$old = (string) get_post_meta( $post->ID, '_generate_block_type', true );
+			update_post_meta( $post->ID, '_generate_block_type', sanitize_key( (string) $input['block_type'] ) );
+			$updated['block_type'] = array( 'old' => $old, 'new' => (string) get_post_meta( $post->ID, '_generate_block_type', true ) );
+		}
+		if ( isset( $input['layout_settings'] ) ) {
+			$layout_changed = self::write_layout_settings( $post->ID, (array) $input['layout_settings'] );
+			if ( $layout_changed ) {
+				$updated['layout_settings'] = $layout_changed;
+			}
 		}
 		foreach ( array(
 			'display_conditions' => '_generate_element_display_conditions',

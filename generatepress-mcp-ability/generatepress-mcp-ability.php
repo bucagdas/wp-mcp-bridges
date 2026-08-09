@@ -3,7 +3,7 @@
  * Plugin Name: GeneratePress MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/generatepress-mcp-ability
  * Description: GeneratePress ecosystem abilities for MCP. Theme settings, GP Premium module status, GP Elements (full CRUD), GenerateBlocks settings, global styles (full CRUD) and Pro pattern libraries. Components are detected at runtime; abilities of missing components are simply not registered.
- * Version: 1.3.7
+ * Version: 1.3.8
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -167,23 +167,57 @@ class Plugin {
 
 	/**
 	 * GP Premium module settings groups: group => option name.
+	 *
+	 * page_header points at generate_page_header_SETTINGS, not
+	 * generate_page_header_OPTIONS. The two are easy to confuse and this
+	 * bridge had the wrong one until 2026-08-09: *_options is a legacy
+	 * option read only by the one-shot migration
+	 * generate_page_header_transfer_blog_header() (page-header/functions/
+	 * functions.php, which even has a commented-out delete_option() for
+	 * it), while *_settings is what the Customizer writes to
+	 * ("generate_page_header_settings[page_header_position]"), what
+	 * generate_get_page_header_location() reads at runtime, and what GP
+	 * Premium's own export/reset whitelists list. Writing the legacy one
+	 * was a silent no-op. See docs/KOPRU-EKSIKLERI.md.
 	 */
 	const MODULE_SETTINGS = array(
 		'blog'          => 'generate_blog_settings',
 		'menu_plus'     => 'generate_menu_plus_settings',
 		'secondary_nav' => 'generate_secondary_nav_settings',
 		'spacing'       => 'generate_spacing_settings',
-		'page_header'   => 'generate_page_header_options',
+		'page_header'   => 'generate_page_header_settings',
 		'backgrounds'   => 'generate_background_settings',
 		'hooks'         => 'generate_hooks',
 	);
 
+	/**
+	 * Every GP Premium module, as module key => activation constant. The
+	 * key is also the generate_package_<key> option name GP Premium's own
+	 * dashboard toggles (GeneratePress_Pro_Dashboard::get_modules()), and
+	 * generatepress_is_module_active() treats "option === 'activated' OR
+	 * constant defined" as active.
+	 *
+	 * font_library was missing here until 2026-08-09 (found by the
+	 * "kapsam denetimi: gp-premium" audit while it was active on a live
+	 * site): get-status silently omitted it from active_modules and
+	 * toggle-gp-module schema-rejected it. Managing the fonts themselves
+	 * is still out of scope (writes font files to the filesystem — A6
+	 * code-writing gate), but the module's activation state is an
+	 * ordinary option and belongs here.
+	 *
+	 * colors/typography/hooks/page_header/sections are deprecated in GP
+	 * Premium 2.x — still listed because they remain toggleable and
+	 * functional on sites that use them, but on a current GeneratePress
+	 * theme colors/typography never load their PHP at all (superseded by
+	 * the theme's own color/typography systems).
+	 */
 	const GP_MODULES = array(
 		'backgrounds'      => 'GENERATE_BACKGROUNDS',
 		'blog'             => 'GENERATE_BLOG',
 		'copyright'        => 'GENERATE_COPYRIGHT',
 		'disable_elements' => 'GENERATE_DISABLE_ELEMENTS',
 		'elements'         => 'GENERATE_ELEMENTS',
+		'font_library'     => 'GENERATE_FONT_LIBRARY',
 		'secondary_nav'    => 'GENERATE_SECONDARY_NAV',
 		'spacing'          => 'GENERATE_SPACING',
 		'menu_plus'        => 'GENERATE_MENU_PLUS',
@@ -195,6 +229,69 @@ class Plugin {
 		'colors'           => 'GENERATE_COLORS',
 		'site_library'     => 'GENERATE_SITE_LIBRARY',
 	);
+
+	/**
+	 * Valid _generate_block_type values for a "block" GP Element — the
+	 * sub-type that decides which theme hook the element renders on
+	 * (GeneratePress_Block_Element::__construct()'s switch, plus
+	 * post-meta-template which branches on _generate_post_meta_location).
+	 *
+	 * "search-modal" is deliberately included even though GP Premium's
+	 * own admin list-table filter dropdown omits it — it IS handled by
+	 * the renderer and ships in the block editor bundle; the missing
+	 * dropdown entry is a GP oversight, not a signal that it is invalid.
+	 */
+	const GP_BLOCK_TYPES = array(
+		'hook',
+		'site-header',
+		'site-footer',
+		'page-hero',
+		'content-template',
+		'loop-template',
+		'post-meta-template',
+		'post-navigation-template',
+		'archive-navigation-template',
+		'right-sidebar',
+		'left-sidebar',
+		'search-modal',
+	);
+
+	/**
+	 * Layout-type GP Element settings: input key => [meta key, kind].
+	 * Mirrors GP Premium's own save handler (elements/class-metabox.php's
+	 * $layout_values map): "key" values go through sanitize_key(),
+	 * "number" through absint(), and a falsy/omitted value DELETES the
+	 * meta rather than storing an empty one (that is how GP represents
+	 * "inherit the site default").
+	 */
+	const GP_ELEMENT_LAYOUT_FIELDS = array(
+		'sidebar_layout'               => array( '_generate_sidebar_layout', 'key' ),
+		'footer_widgets'               => array( '_generate_footer_widgets', 'key' ),
+		'content_area'                 => array( '_generate_content_area', 'key' ),
+		'content_width'                => array( '_generate_content_width', 'number' ),
+		'disable_site_header'          => array( '_generate_disable_site_header', 'bool' ),
+		'disable_mobile_header'        => array( '_generate_disable_mobile_header', 'bool' ),
+		'disable_top_bar'              => array( '_generate_disable_top_bar', 'bool' ),
+		'disable_primary_navigation'   => array( '_generate_disable_primary_navigation', 'bool' ),
+		'disable_secondary_navigation' => array( '_generate_disable_secondary_navigation', 'bool' ),
+		'disable_featured_image'       => array( '_generate_disable_featured_image', 'bool' ),
+		'disable_content_title'        => array( '_generate_disable_content_title', 'bool' ),
+		'disable_footer'               => array( '_generate_disable_footer', 'bool' ),
+	);
+
+	/**
+	 * Footer-widget vocabulary for a LAYOUT ELEMENT — deliberately NOT
+	 * the same as the theme's per-post _generate-footer-widget-meta
+	 * (which this bridge exposes through update-post-layout using
+	 * "0".."5"). A layout element spells "none" as the string
+	 * "no-widgets" and has no "0". Confirmed from GP Premium's own
+	 * radio inputs; conflating the two would silently store a value GP
+	 * never reads.
+	 */
+	const GP_ELEMENT_FOOTER_WIDGETS = array( '', '1', '2', '3', '4', '5', 'no-widgets' );
+
+	/** Layout element content-area vocabulary. */
+	const GP_ELEMENT_CONTENT_AREAS = array( '', 'contained', 'full-width' );
 
 	public static function init(): void {
 		add_action( 'wp_abilities_api_categories_init', array( __CLASS__, 'register_category' ) );
@@ -332,8 +429,29 @@ class Plugin {
 		return current_user_can( 'manage_options' );
 	}
 
+	/**
+	 * Permission base for every GP Element verb.
+	 *
+	 * GP Premium gates its Elements ADMIN SCREEN on
+	 * generate_elements_admin_menu_capability (default manage_options)
+	 * and this bridge deliberately matches that gate — including the
+	 * filter, so a site that widens it (e.g. to edit_posts, as GP's own
+	 * generate_elements_metabox_ajax_allow_editors flow does for the
+	 * Elements AJAX endpoints) automatically widens these verbs too.
+	 *
+	 * Worth knowing: the gp_elements post type itself registers NO custom
+	 * capabilities, so at the pure data layer WordPress's default post
+	 * capabilities apply — an Editor with edit_posts can already edit
+	 * elements through wp-admin. Matching the admin-screen gate is
+	 * therefore stricter than the raw data layer by default. That is
+	 * intentional (elements can inject site-wide markup, and the Hook
+	 * type can execute PHP), and the default is left as GP ships it —
+	 * a site that wants Editors to reach these verbs should apply the
+	 * same filter it would apply to reach GP's own Elements screen,
+	 * rather than this bridge inventing its own looser rule. Confirmed
+	 * against GP Premium 2.5.6 during the 2026-08-09 scope audit.
+	 */
 	public static function permission_gp_elements( $input = null ): bool {
-		// Honor GP Premium's own capability filter for the Elements screen.
 		return current_user_can( apply_filters( 'generate_elements_admin_menu_capability', 'manage_options' ) );
 	}
 
