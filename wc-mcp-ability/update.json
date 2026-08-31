@@ -1,16 +1,16 @@
 {
     "name": "WooCommerce MCP Ability",
     "slug": "wc-mcp-ability",
-    "version": "2.7.2",
+    "version": "2.8.0",
     "author": "bucagdas",
     "homepage": "https://github.com/bucagdas/wp-mcp-bridges/tree/main/wc-mcp-ability",
     "requires": "7.0",
     "tested": "7.0",
     "requires_php": "8.0",
-    "download_url": "https://github.com/bucagdas/wp-mcp-bridges/releases/download/wc-mcp-ability-v2.7.2/wc-mcp-ability.zip",
-    "last_updated": "2026-08-08 11:06:51",
+    "download_url": "https://github.com/bucagdas/wp-mcp-bridges/releases/download/wc-mcp-ability-v2.8.0/wc-mcp-ability.zip",
+    "last_updated": "2026-08-31 13:22:28",
     "sections": {
         "description": "WooCommerce abilities for MCP. Product/taxonomy/customer/coupon CRUD plus a generic wc/v3 REST request for the rest of the store.",
-        "changelog": "<h4>2.7.2</h4><ul><li>Security audit: toggle-payment-gateway now requires confirm: true \u2014 disabling a payment gateway can block checkout for customers relying on it, and the annotation (destructive:false) undersold that impact.</li></ul><h4>2.7.1</h4><ul><li>CRITICAL: fixed a data-corruption bug \u2014 create/update-product-category, create/update-product-tag, coupon descriptions and create-customer were not wp_slash()-ing content before writing, causing WordPress&#39;s own unslash step to strip literal backslashes. WooCommerce&#39;s own CRUD objects were found to be inconsistent: orders (HPOS), existing-customer updates and product variations were verified already safe and left untouched, while category/tag creation, coupon descriptions and new-customer creation needed the fix.</li></ul><h4>2.7.0</h4><ul><li>Initial public release: 30 abilities covering product category/tag/variation CRUD, customer and coupon CRUD, order creation/refund, payment gateway listing/toggling, product image/taxonomy assignment, and a generic wc/v3 REST passthrough.</li></ul>"
+        "changelog": "<h4>2.8.0</h4><ul><li>Two new abilities, <code>get-permalink-settings</code> and <code>update-permalink-settings</code>, for WooCommerce&#39;s product URL base -- the Settings &gt; Permalinks &gt; Product permalinks setting. It was reachable from nowhere before: the wc/v3 settings API does not expose it in any group.</li><li>Supports the same choices the screen offers (default, shop base, shop base with category, custom) plus the category, tag and attribute bases, takes the shop base from the shop page&#39;s own slug so a renamed or nested shop page works, sets <code>use_verbose_page_rules</code> the way WooCommerce does, and rebuilds the rewrite rules -- without which the setting changes and every new product URL returns 404.</li><li>Requires <code>confirm: true</code>, since every product URL on the site changes.</li></ul><h4>2.7.2</h4><ul><li>Security audit: toggle-payment-gateway now requires confirm: true \u2014 disabling a payment gateway can block checkout for customers relying on it, and the annotation (destructive:false) undersold that impact.</li></ul><h4>2.7.1</h4><ul><li>CRITICAL: fixed a data-corruption bug \u2014 create/update-product-category, create/update-product-tag, coupon descriptions and create-customer were not wp_slash()-ing content before writing, causing WordPress&#39;s own unslash step to strip literal backslashes. WooCommerce&#39;s own CRUD objects were found to be inconsistent: orders (HPOS), existing-customer updates and product variations were verified already safe and left untouched, while category/tag creation, coupon descriptions and new-customer creation needed the fix.</li></ul><h4>2.7.0</h4><ul><li>Initial public release: 30 abilities covering product category/tag/variation CRUD, customer and coupon CRUD, order creation/refund, payment gateway listing/toggling, product image/taxonomy assignment, and a generic wc/v3 REST passthrough.</li></ul>"
     }
 }
