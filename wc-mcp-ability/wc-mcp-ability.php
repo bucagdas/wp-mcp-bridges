@@ -3,7 +3,7 @@
  * Plugin Name: WooCommerce MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/wc-mcp-ability
  * Description: WooCommerce abilities for MCP. Product/taxonomy/customer/coupon CRUD plus a generic wc/v3 REST request for the rest of the store.
- * Version: 2.7.2
+ * Version: 2.8.0
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -28,6 +28,7 @@ require_once __DIR__ . '/includes/abilities-orders.php';
 require_once __DIR__ . '/includes/abilities-variations.php';
 require_once __DIR__ . '/includes/abilities-payment-gateways.php';
 require_once __DIR__ . '/includes/abilities-product-taxonomy-images.php';
+require_once __DIR__ . '/includes/abilities-permalinks.php';
 
 require_once __DIR__ . '/includes/plugin-update-checker/plugin-update-checker.php';
 \YahnisElsts\PluginUpdateChecker\v5p7\PucFactory::buildUpdateChecker(
@@ -91,6 +92,7 @@ class Plugin {
 		Variations::register();
 		PaymentGateways::register();
 		ProductTaxonomyImages::register();
+		Permalinks::register();
 	}
 
 	/**
