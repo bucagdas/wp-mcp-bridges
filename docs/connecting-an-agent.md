@@ -47,6 +47,18 @@ It speaks MCP over HTTP: a single `POST` endpoint, JSON-RPC in the body, an
 `Mcp-Session-Id` header returned by `initialize` and required on every request
 after it. Any compliant MCP client handles that for you.
 
+Nothing needs configuring to bring that route up. The adapter creates its
+default server on its own and has no settings screen; the abilities appear on it
+because each bridge flags its own as public.
+
+One exception: on a site still using plain permalinks (`?p=123`), WordPress does
+not serve `/wp-json/` at all. Use the query form of the same route, which
+behaves identically:
+
+```
+https://example.com/?rest_route=/mcp/mcp-adapter-default-server
+```
+
 ## 3. Point your client at it
 
 ### Clients that speak remote HTTP MCP
@@ -195,13 +207,22 @@ mcp-adapter-execute-ability`.** This is not about the tool. The *ability* you
 asked for refused the connected user, and the adapter reports it as a denial on
 the meta-tool. Connect as a user whose role covers that ability.
 
-**The endpoint returns 404.** The adapter is not active, or the route was never
-registered. Check that `https://example.com/wp-json/` responds at all, then that
-the MCP Adapter plugin is activated.
+**The endpoint returns 404.** Check that `https://example.com/wp-json/` responds
+at all — on plain permalinks it does not, and you need the
+`?rest_route=/mcp/mcp-adapter-default-server` form. If `/wp-json/` is fine but
+the MCP route is not, the adapter is not activated.
 
-**The agent connects but sees no bridge abilities.** The bridge is not
-activated, or its target plugin or theme is missing — every bridge registers its
-abilities only when the thing it bridges is present. Confirm with an
+**The agent connects but sees no bridge abilities.** Count the tools first. On
+the adapter's default server an agent sees exactly three, and the bridges'
+abilities arrive through them. If instead it sees a handful of named tools, the
+client is pointed at a different MCP server on the same site: WooCommerce runs
+its own at `/wp-json/woocommerce/mcp`, and only WooCommerce's own abilities are
+ever exposed there — no bridge appears on it, by design on both sides. Point the
+client back at `/wp-json/mcp/mcp-adapter-default-server`.
+
+If the tool count is right and the abilities are still missing, the bridge is
+not activated, or its target plugin or theme is missing — every bridge registers
+its abilities only when the thing it bridges is present. Confirm with an
 authenticated request to
 `https://example.com/wp-json/wp-abilities/v1/abilities?per_page=100`.
 
