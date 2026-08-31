@@ -3,7 +3,7 @@
  * Plugin Name: Rank Math MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/rank-math-mcp-ability
  * Description: Full-coverage Rank Math SEO abilities for MCP. Per-post SEO metadata (core, robots, social, schema), settings, redirections, 404 monitor, sitemap tools, module toggling and analytics status.
- * Version: 2.0.4
+ * Version: 2.1.0
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -39,8 +39,26 @@ class Plugin {
 	/**
 	 * Keys matching this pattern are stripped from read output and
 	 * refused on write. License/connection data is a hard red line.
+	 *
+	 * The pattern deliberately errs towards hiding: a key it has never
+	 * seen before is refused rather than leaked. What it must not do is
+	 * hide ordinary settings, and a bare "auth" alternative did exactly
+	 * that -- it matches the "auth" inside "author", so eight author
+	 * archive settings (author_robots, url_author_base,
+	 * disable_author_archives and friends) were unreadable and
+	 * unwritable. "auth" now has to look like a credential to match.
 	 */
-	const SENSITIVE_PATTERN = '/(api[_-]?key|token|secret|password|licen[cs]e|licensing|credential|auth|connect|activation)/i';
+	const SENSITIVE_PATTERN = '/(api[_-]?key|access[_-]?key|token|secret|password|licen[cs]e|licensing|credential|connect|activation|oauth|authoriz|auth[_-]?(?:key|token|code|secret))/i';
+
+	/**
+	 * Keys that match the pattern but are known to hold nothing secret,
+	 * checked against Rank Math 1.0.277.1's four settings groups (182
+	 * distinct keys): "password" occurs there only inside a robots
+	 * directive, never as a credential.
+	 */
+	const SENSITIVE_ALLOWLIST = array(
+		'noindex_password_protected',
+	);
 
 	/**
 	 * Settings groups exposed by get/update-settings, mapped to option
@@ -116,6 +134,9 @@ class Plugin {
 	const REDACTED = '***REDACTED***';
 
 	public static function is_sensitive_key( string $key ): bool {
+		if ( in_array( strtolower( $key ), self::SENSITIVE_ALLOWLIST, true ) ) {
+			return false;
+		}
 		return (bool) preg_match( self::SENSITIVE_PATTERN, $key );
 	}
 
@@ -140,6 +161,28 @@ class Plugin {
 			$out[ $key ] = is_array( $value ) ? self::strip_sensitive( $value ) : $value;
 		}
 		return $out;
+	}
+
+	/**
+	 * Rank Math keeps its settings in an in-memory object built once per
+	 * request, so writing the option straight through leaves everything
+	 * that reads Helper::get_settings() in that same request looking at
+	 * the old value -- and nothing reports an error, the write really did
+	 * land in the database. Measured on 1.0.277.1: after update-settings
+	 * wrote sitemap.items_per_page = 207, get_option() returned 207 while
+	 * Helper::get_settings('sitemap.items_per_page') still returned 200
+	 * until reset() ran. Rank Math's own settings abilities call this
+	 * straight after saving, so the bridge does too rather than inventing
+	 * its own invalidation.
+	 */
+	public static function reset_settings_cache(): void {
+		if ( ! function_exists( 'rank_math' ) ) {
+			return;
+		}
+		$rank_math = rank_math();
+		if ( isset( $rank_math->settings ) && method_exists( $rank_math->settings, 'reset' ) ) {
+			$rank_math->settings->reset();
+		}
 	}
 
 	/**

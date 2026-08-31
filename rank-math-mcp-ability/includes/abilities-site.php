@@ -19,7 +19,7 @@ class Site {
 			'rank-math-mcp/get-settings',
 			array(
 				'label'               => __( 'Get Rank Math settings', 'rank-math-mcp-ability' ),
-				'description'         => __( 'Returns one Rank Math settings group: "general", "titles", "sitemap" or "instant-indexing". Sensitive values such as API keys, tokens and secrets are removed from the response.', 'rank-math-mcp-ability' ),
+				'description'         => __( 'Returns one Rank Math settings group: "general", "titles", "sitemap" or "instant-indexing". Sensitive values such as API keys, tokens and secrets are removed from the response. Rank Math 1.0.277 added a native core/get-settings of its own; that one returns every group at once, this one is scoped to a single group and redacts secrets.', 'rank-math-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
 					'type'                 => 'object',
@@ -47,7 +47,7 @@ class Site {
 			'rank-math-mcp/update-settings',
 			array(
 				'label'               => __( 'Update a Rank Math setting', 'rank-math-mcp-ability' ),
-				'description'         => __( 'Updates one top-level key in a Rank Math settings group ("general", "titles", "sitemap" or "instant-indexing"). Keys that may contain secrets are refused with an error. Returns the old and new value, read back after the write.', 'rank-math-mcp-ability' ),
+				'description'         => __( 'Updates one top-level key in a Rank Math settings group ("general", "titles", "sitemap" or "instant-indexing"). Keys that may contain secrets are refused with an error. Rank Math 1.0.277 added native set-* abilities covering parts of the same ground (set-sitemap-settings, set-global-seo-settings and so on); those take curated field sets, while this one writes any single key in a group by name. Returns the old and new value, read back after the write.', 'rank-math-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
 					'type'                 => 'object',
@@ -63,6 +63,10 @@ class Site {
 							'description' => 'Top-level settings key to update.',
 						),
 						'value' => array(
+							// Settings values are untyped by nature; declaring the
+							// union keeps core's schema validator from calling
+							// _doing_it_wrong() on every call.
+							'type'        => array( 'string', 'integer', 'number', 'boolean', 'array', 'object', 'null' ),
 							'description' => 'New value for the key.',
 						),
 					),
@@ -83,7 +87,7 @@ class Site {
 			'rank-math-mcp/toggle-module',
 			array(
 				'label'               => __( 'Toggle a Rank Math module', 'rank-math-mcp-ability' ),
-				'description'         => __( 'Activates or deactivates one Rank Math module by updating the rank_math_modules option (same option Rank Math\'s own module screen writes). Requires confirm: true. When activating a module that needs database tables (redirections, 404-monitor), Rank Math creates them on the next admin page load if it has not already. See get-status for the current module map.', 'rank-math-mcp-ability' ),
+				'description'         => __( 'Activates or deactivates one Rank Math module by updating the rank_math_modules option (same option Rank Math\'s own module screen writes). Requires confirm: true. The write goes through Rank Math\'s own Helper::update_modules(), so a module that needs database tables (redirections, 404-monitor) gets them created as part of being activated. Rank Math 1.0.277 added a native set-module-status that toggles several modules at once; this one toggles a single module and reports its old and new state. See get-status for the current module map.', 'rank-math-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
 					'type'                 => 'object',
@@ -151,7 +155,7 @@ class Site {
 			'rank-math-mcp/get-status',
 			array(
 				'label'               => __( 'Get Rank Math status', 'rank-math-mcp-ability' ),
-				'description'         => __( 'Returns the Rank Math plugin status: version, database version, per-module activation map (with every toggleable module), presence of the redirections/404/analytics database tables, whether the plugin is connected to a Rank Math account, and the post types Rank Math manages.', 'rank-math-mcp-ability' ),
+				'description'         => __( 'Returns the Rank Math plugin status: version, database version, per-module activation map (with every toggleable module), presence of the redirections/404/analytics database tables, whether the plugin is connected to a Rank Math account, and the post types Rank Math manages. Rank Math 1.0.277 added a native get-system-status covering similar ground in its own admin-report shape; this one reads the live plugin state directly.', 'rank-math-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'output_schema'       => array(
 					'type'        => 'object',
@@ -202,6 +206,7 @@ class Site {
 		$old              = array_key_exists( $key, $settings ) ? $settings[ $key ] : null;
 		$settings[ $key ] = $input['value'];
 		update_option( $option_name, $settings );
+		Plugin::reset_settings_cache();
 
 		$readback = get_option( $option_name, array() );
 		$new      = is_array( $readback ) && array_key_exists( $key, $readback ) ? $readback[ $key ] : null;

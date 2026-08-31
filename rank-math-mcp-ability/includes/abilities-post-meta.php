@@ -358,7 +358,10 @@ class Post_Meta {
 							'description' => 'Field to set on every matched post.',
 						),
 						'value'        => array(
-							'description' => 'New value: array of directives for robots, string for the others.',
+							// Declared as a union so core's schema validator does not
+							// call _doing_it_wrong() on every call.
+							'type'         => array( 'string', 'integer', 'number', 'boolean', 'array', 'object', 'null' ),
+							'description'  => 'New value: array of directives for robots, string for the others.',
 						),
 						'only_missing' => array(
 							'type'        => 'boolean',
