@@ -152,7 +152,13 @@ class Options {
 		}
 
 		$old = get_option( $name );
-		update_option( $name, $input['value'] );
+
+		if ( isset( self::REWRITE_OPTIONS[ $name ] ) ) {
+			self::write_rewrite_option( $name, $input['value'] );
+		} else {
+			update_option( $name, $input['value'] );
+		}
+
 		$new = get_option( $name );
 
 		return array(
@@ -160,5 +166,58 @@ class Options {
 			'old'  => $old,
 			'new'  => $new,
 		);
+	}
+
+	/**
+	 * Options that decide what the site's URLs look like, mapped to the
+	 * WP_Rewrite setter that owns each one.
+	 */
+	const REWRITE_OPTIONS = array(
+		'permalink_structure' => 'set_permalink_structure',
+		'category_base'       => 'set_category_base',
+		'tag_base'            => 'set_tag_base',
+	);
+
+	/**
+	 * Writing one of these with update_option() looks like it worked and
+	 * is worse than doing nothing: WordPress starts generating URLs in the
+	 * new shape everywhere -- menus, canonical tags, sitemaps -- while the
+	 * stored rewrite rules still describe the old one, so every new URL
+	 * returns 404 and no error is raised anywhere. Measured on 7.1: after
+	 * update-option set permalink_structure to /%postname%/, get_permalink()
+	 * returned /audit-test/ and that URL 404'd, while the old dated URL kept
+	 * answering 200 until the rules were flushed.
+	 *
+	 * wp-admin's own Permalinks screen goes through the WP_Rewrite setters
+	 * and then calls flush_rewrite_rules() (wp-admin/options-permalink.php),
+	 * so this does the same. The setters matter beyond the option write:
+	 * set_permalink_structure() re-initialises the rewrite object and fires
+	 * permalink_structure_changed, which other plugins listen for.
+	 */
+	private static function write_rewrite_option( string $name, $value ): void {
+		global $wp_rewrite;
+
+		$setter = self::REWRITE_OPTIONS[ $name ];
+
+		if ( $wp_rewrite instanceof \WP_Rewrite && method_exists( $wp_rewrite, $setter ) ) {
+			$wp_rewrite->$setter( is_string( $value ) ? $value : (string) $value );
+		} else {
+			update_option( $name, $value );
+		}
+
+		// The taxonomy permastructs are built once, on "init", from the
+		// option values as they were when the request started, and
+		// WP_Rewrite::init() does not rebuild them. Flushing without
+		// rebuilding first regenerates the rules from the old base and
+		// writes them back, so the new URLs 404 until something else
+		// flushes again. Measured on 7.1: after category_base went from ""
+		// to "konular", the permastruct was still /category/%category% and
+		// /konular/announcements/ returned 404; calling this first made the
+		// permastruct konular/%category% and the URL answer 200.
+		if ( function_exists( 'create_initial_taxonomies' ) ) {
+			create_initial_taxonomies();
+		}
+
+		flush_rewrite_rules();
 	}
 }
