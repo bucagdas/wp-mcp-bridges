@@ -148,6 +148,9 @@ class Theme {
 								'description' => 'Theme setting key, e.g. "container_width" or "hide_tagline".',
 							),
 							'value' => array(
+								// Declared as a union so core's schema validator does
+								// not call _doing_it_wrong() on every call.
+								'type'        => array( 'string', 'integer', 'number', 'boolean', 'array', 'object', 'null' ),
 								'description' => 'New value (string, number, boolean or array).',
 							),
 						),
@@ -414,6 +417,9 @@ class Theme {
 								'description' => 'Theme mod key (see get-theme-mods).',
 							),
 							'value' => array(
+								// Declared as a union so core's schema validator does
+								// not call _doing_it_wrong() on every call.
+								'type'        => array( 'string', 'integer', 'number', 'boolean', 'array', 'object', 'null' ),
 								'description' => 'New value. Type depends on key: integer (custom_logo), object (nav_menu_locations), string (everything else, including custom_css).',
 							),
 						),

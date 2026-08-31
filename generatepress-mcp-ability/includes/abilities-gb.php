@@ -374,6 +374,9 @@ class GB {
 								'description' => 'GenerateBlocks setting key.',
 							),
 							'value' => array(
+								// Declared as a union so core's schema validator does
+								// not call _doing_it_wrong() on every call.
+								'type'        => array( 'string', 'integer', 'number', 'boolean', 'array', 'object', 'null' ),
 								'description' => 'New value (string, number or boolean).',
 							),
 						),
