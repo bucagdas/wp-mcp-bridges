@@ -65,6 +65,7 @@ Every bridge is a self-contained plugin — install only the ones you need:
 1. Open the bridge's own README (linked above) and download its zip from the linked release.
 2. In wp-admin, go to **Plugins → Add New → Upload Plugin**, choose the zip, and install.
 3. Activate it, then install and activate the WordPress MCP Adapter (see below) so the abilities are exposed as MCP tools.
+4. Connect your agent to the site — see [Connecting your agent](#connecting-your-agent) below.
 
 Each bridge checks for its own updates independently against a JSON file hosted in this repository — no separate update source or account needed. See the individual bridge READMEs for details.
 
@@ -83,6 +84,68 @@ The adapter is **not published on the wordpress.org plugin directory** — insta
 - **Manual:** download the [latest release ZIP](https://github.com/WordPress/mcp-adapter/releases/latest) and upload it via **Plugins → Add New → Upload Plugin** in wp-admin.
 
 See the project's own [installation instructions](https://github.com/WordPress/mcp-adapter#installation) for more detail. Note that the wordpress.org plugin search does list unrelated third-party plugins with similar names (e.g. "Royal MCP", "Easy MCP AI", "Enable Abilities for MCP") — none of those are the official WordPress MCP Adapter this repo's bridges are built for.
+
+## Connecting your agent
+
+Bridges register abilities and the adapter exposes them; the last step is
+pointing an agent at your site. Full walkthrough, permission model and
+troubleshooting: **[docs/connecting-an-agent.md](docs/connecting-an-agent.md)**.
+The short version:
+
+**1. Create an application password.** In wp-admin, **Users → Profile →
+Application Passwords**. Your login password will not work, and the panel only
+appears over HTTPS.
+
+**2. The endpoint is one route:**
+
+```
+https://example.com/wp-json/mcp/mcp-adapter-default-server
+```
+
+**3. Add it to your client.** For a client that takes a remote HTTP MCP server
+with custom headers, such as Claude Code, authentication is HTTP Basic:
+
+```bash
+claude mcp add --transport http mysite \
+  https://example.com/wp-json/mcp/mcp-adapter-default-server \
+  --header "Authorization: Basic $(printf '%s' 'USERNAME:APP PASSWORD' | base64)"
+```
+
+For a client that only launches local processes, or where a static header is
+awkward to set, use Automattic's stdio proxy instead:
+
+```json
+{
+  "mcpServers": {
+    "mysite": {
+      "command": "npx",
+      "args": ["-y", "@automattic/mcp-wordpress-remote@latest"],
+      "env": {
+        "WP_API_URL": "https://example.com/wp-json/mcp/mcp-adapter-default-server",
+        "WP_API_USERNAME": "your-username",
+        "WP_API_PASSWORD": "your application password"
+      }
+    }
+  }
+}
+```
+
+**4. You should see three tools:** `mcp-adapter-discover-abilities`,
+`mcp-adapter-get-ability-info` and `mcp-adapter-execute-ability`. Bridge
+abilities are not separate MCP tools — the agent finds them with
+`discover-abilities` and runs them through `execute-ability`, by name:
+
+```json
+{
+  "ability_name": "wp-core-mcp/list-posts",
+  "parameters": { "per_page": 2 }
+}
+```
+
+The agent can do exactly what the connected WordPress user can do: reaching the
+server needs only `read`, but every ability enforces its own capability. Create
+a dedicated user with the narrowest role that covers the work, and revoke access
+later by deleting its application password.
 
 ## Requirements
 

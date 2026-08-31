@@ -56,6 +56,21 @@ This plugin checks for updates against a JSON file hosted in this repository, ro
 
 ## Usage
 
+### Connecting your agent
+
+Point your MCP client at the adapter's default server:
+
+```
+https://example.com/wp-json/mcp/mcp-adapter-default-server
+```
+
+Authenticate with an application password belonging to a user whose role covers
+the abilities you intend to use — reaching the server needs only `read`, but
+every ability enforces its own capability.
+[docs/connecting-an-agent.md](../docs/connecting-an-agent.md) has the client
+configuration for both remote-HTTP clients and clients that only launch a local
+process, plus the permission model and troubleshooting.
+
 ### Over MCP
 
 ```json
