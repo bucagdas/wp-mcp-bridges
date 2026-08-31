@@ -117,7 +117,8 @@ All writes read the value back after writing and return `{old, new}`. Destructiv
 
 ## Tested versions
 
-- WordPress: 7.0
+- WordPress: 7.1
+- WordPress MCP Adapter: 0.5.0
 
 ## License
 
