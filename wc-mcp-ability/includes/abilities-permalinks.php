@@ -63,7 +63,7 @@ class Permalinks {
 			'wc-mcp/get-permalink-settings',
 			array(
 				'label'               => __( 'Get product permalink settings', 'wc-mcp-ability' ),
-				'description'         => __( 'Returns WooCommerce\'s product URL bases (product, category, tag, attribute), which of the Permalinks screen\'s presets the current product base corresponds to ("default", "shop_base", "shop_base_with_category" or "custom"), the shop page\'s slug, and an example product URL. These live in the woocommerce_permalinks option and are not part of the wc/v3 settings API.', 'wc-mcp-ability' ),
+				'description'         => __( 'Returns WooCommerce\'s product URL bases (product, category, tag, attribute, and brand where the product_brand taxonomy exists), which of the Permalinks screen\'s presets the current product base corresponds to ("default", "shop_base", "shop_base_with_category" or "custom"), the shop page\'s slug, and an example product URL. These live in the woocommerce_permalinks option and are not part of the wc/v3 settings API.', 'wc-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'output_schema'       => array(
 					'type'        => 'object',
@@ -79,7 +79,7 @@ class Permalinks {
 			'wc-mcp/update-permalink-settings',
 			array(
 				'label'               => __( 'Update product permalink settings', 'wc-mcp-ability' ),
-				'description'         => __( 'Sets the product URL base, the same setting as Settings > Permalinks > Product permalinks. Pass structure: "default" (/product/sample/), "shop_base" (/shop/sample/), "shop_base_with_category" (/shop/category/sample/), or "custom" together with product_base. The shop base is taken from the shop page\'s own slug, so a renamed or nested shop page is handled correctly, and use_verbose_page_rules is set when the base contains it, exactly as WooCommerce\'s own screen does. Category, tag and attribute bases can be set in the same call. The stored rewrite rules are dropped afterwards so WordPress rebuilds them on the next request -- without that the option changes but every new product URL returns 404. Note that use_verbose_page_rules is only ever turned on, never off, matching WooCommerce\'s own screen: switching back to a base that does not contain the shop page leaves it enabled. Requires confirm: true, since every product URL on the site changes and old ones only survive if something redirects them. Returns {old,new} read back after the write.', 'wc-mcp-ability' ),
+				'description'         => __( 'Sets the product URL base, the same setting as Settings > Permalinks > Product permalinks. Pass structure: "default" (/product/sample/), "shop_base" (/shop/sample/), "shop_base_with_category" (/shop/category/sample/), or "custom" together with product_base. The shop base is taken from the shop page\'s own slug, so a renamed or nested shop page is handled correctly, and use_verbose_page_rules is set when the base contains it, exactly as WooCommerce\'s own screen does. Category, tag, attribute and brand bases can be set in the same call. The brand base is stored separately by WooCommerce, in woocommerce_brand_permalink rather than woocommerce_permalinks, and is only accepted when the product_brand taxonomy exists. The stored rewrite rules are dropped afterwards so WordPress rebuilds them on the next request -- without that the option changes but every new product URL returns 404. Note that use_verbose_page_rules is only ever turned on, never off, matching WooCommerce\'s own screen: switching back to a base that does not contain the shop page leaves it enabled. Requires confirm: true, since every product URL on the site changes and old ones only survive if something redirects them. Returns {old,new} read back after the write.', 'wc-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
 					'type'                 => 'object',
@@ -105,6 +105,10 @@ class Permalinks {
 							'type'        => 'string',
 							'description' => 'Optional attribute base. Empty string restores the default.',
 						),
+						'brand_base'     => array(
+							'type'        => 'string',
+							'description' => 'Optional product brand base. Empty string restores the default ("brand"). Only accepted when the product_brand taxonomy exists.',
+						),
 						'confirm'        => array(
 							'type'        => 'boolean',
 							'description' => 'Must be true. Every product URL on the site changes.',
@@ -129,7 +133,7 @@ class Permalinks {
 	// ---------------------------------------------------------------------
 
 	public static function cb_get() {
-		return self::describe( self::permalinks() );
+		return self::describe( self::report() );
 	}
 
 	public static function cb_update( $input ) {
@@ -137,8 +141,8 @@ class Permalinks {
 			return new \WP_Error( 'confirm_required', __( 'Pass confirm: true — this rewrites every product URL on the site.', 'wc-mcp-ability' ) );
 		}
 
-		$old        = self::permalinks();
-		$permalinks = $old;
+		$old        = self::report();
+		$permalinks = self::permalinks();
 		$structures = self::structures();
 
 		if ( isset( $input['structure'] ) ) {
@@ -153,9 +157,11 @@ class Permalinks {
 				// leading slash.
 				$base = preg_replace( '#/+#', '/', '/' . str_replace( '#', '', trim( (string) $input['product_base'] ) ) );
 
-				// A base of just "/%product_cat%/" would collide with page
-				// URLs, so WooCommerce prefixes it with the product slug.
-				if ( '/%product_cat%/' === trailingslashit( $base ) ) {
+				// A base of just "/%product_cat%/" or "/%product_brand%/" would
+				// collide with page URLs, so WooCommerce prefixes it with the
+				// product slug (settings_save() for the first,
+				// WC_Admin_Brands::validate_product_base() for the second).
+				if ( in_array( trailingslashit( $base ), array( '/%product_cat%/', '/%product_brand%/' ), true ) ) {
 					$base = '/' . _x( 'product', 'slug', 'woocommerce' ) . $base;
 				}
 				$permalinks['product_base'] = wc_sanitize_permalink( $base );
@@ -173,6 +179,17 @@ class Permalinks {
 			}
 		}
 
+		// The brand base is the odd one out: it lives in its own option
+		// (woocommerce_brand_permalink), not in woocommerce_permalinks, and
+		// WC_Brands::init_taxonomy() reads it when registering product_brand.
+		// Written the same way WC_Admin_Brands::save_permalink_settings() does.
+		if ( array_key_exists( 'brand_base', $input ) ) {
+			if ( ! self::brands_available() ) {
+				return new \WP_Error( 'brands_unavailable', __( 'This store has no product_brand taxonomy, so there is no brand base to set.', 'wc-mcp-ability' ) );
+			}
+			update_option( 'woocommerce_brand_permalink', wc_sanitize_permalink( trim( wc_clean( (string) $input['brand_base'] ) ) ) );
+		}
+
 		// Shop base may need verbose page rules if the shop page is nested.
 		// Straight out of WC_Admin_Permalink_Settings::settings_save().
 		$shop_page_id   = wc_get_page_id( 'shop' );
@@ -188,7 +205,7 @@ class Permalinks {
 
 		self::invalidate_rewrite_rules();
 
-		$new = self::permalinks();
+		$new = self::report();
 
 		return array(
 			'old'                 => $old,
@@ -231,13 +248,47 @@ class Permalinks {
 	private static function permalinks(): array {
 		$stored = wc_get_permalink_structure();
 
-		return array(
+		$permalinks = array(
 			'product_base'           => (string) ( $stored['product_base'] ?? '' ),
 			'category_base'          => (string) ( $stored['category_base'] ?? '' ),
 			'tag_base'               => (string) ( $stored['tag_base'] ?? '' ),
 			'attribute_base'         => (string) ( $stored['attribute_base'] ?? '' ),
 			'use_verbose_page_rules' => (bool) ( $stored['use_verbose_page_rules'] ?? false ),
 		);
+
+		return $permalinks;
+	}
+
+	/**
+	 * The reported shape, which is deliberately not the stored shape: the
+	 * brand base lives in its own option and must never be written into
+	 * woocommerce_permalinks. Keeping the two apart is the whole reason
+	 * this function exists -- merging them once put brand_base and
+	 * brand_effective_base into WooCommerce's option, where nothing owns
+	 * them and wc_get_permalink_structure() would keep rewriting the row.
+	 */
+	private static function report(): array {
+		$permalinks = self::permalinks();
+
+		if ( self::brands_available() ) {
+			$brand_base = (string) get_option( 'woocommerce_brand_permalink', '' );
+
+			$permalinks['brand_base'] = $brand_base;
+			// An empty option means WooCommerce falls back to the translated
+			// "brand" slug, so report what the URLs actually use as well.
+			$permalinks['brand_effective_base'] = '' === $brand_base ? __( 'brand', 'woocommerce' ) : $brand_base;
+		}
+
+		return $permalinks;
+	}
+
+	/**
+	 * Brands shipped with WooCommerce 9.4 and the taxonomy can still be
+	 * filtered away, so the brand base is only reported and accepted when
+	 * the taxonomy is actually registered.
+	 */
+	private static function brands_available(): bool {
+		return taxonomy_exists( 'product_brand' );
 	}
 
 	private static function describe( array $permalinks ): array {
