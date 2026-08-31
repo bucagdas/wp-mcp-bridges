@@ -74,6 +74,11 @@ class Options {
 							'description' => 'Option name to update.',
 						),
 						'value'   => array(
+							// Options take anything; the union is spelled out because
+							// a property with no "type" makes core's schema validator
+							// call _doing_it_wrong() and emit a PHP warning on every
+							// single call.
+							'type'        => array( 'string', 'integer', 'number', 'boolean', 'array', 'object', 'null' ),
 							'description' => 'New value.',
 						),
 						'confirm' => array(
