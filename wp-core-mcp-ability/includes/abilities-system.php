@@ -413,16 +413,17 @@ class System {
 
 		$results = array();
 		foreach ( (array) ( $tests['direct'] ?? array() ) as $id => $test ) {
-			$method = 'get_test_' . $test['test'];
-			if ( ! method_exists( $health, $method ) ) {
+			$callback = self::resolve_site_health_test( $health, (array) $test );
+			if ( null === $callback ) {
 				continue;
 			}
+			$label = $test['label'] ?? $id;
 			try {
-				$result = call_user_func( array( $health, $method ) );
+				$result = call_user_func( $callback );
 			} catch ( \Throwable $e ) {
 				$results[] = array(
 					'id'          => $id,
-					'label'       => $test['label'],
+					'label'       => $label,
 					'status'      => 'error',
 					'description' => $e->getMessage(),
 				);
@@ -430,13 +431,33 @@ class System {
 			}
 			$results[] = array(
 				'id'          => $id,
-				'label'       => $result['label'] ?? $test['label'],
+				'label'       => $result['label'] ?? $label,
 				'status'      => $result['status'] ?? 'unknown',
 				'description' => wp_strip_all_tags( (string) ( $result['description'] ?? '' ) ),
 			);
 		}
 
 		return array( 'tests' => $results );
+	}
+
+	/**
+	 * Resolves one Site Health test to a callable the same way core's own
+	 * runner does (see the direct-test loop in class-wp-site-health.php):
+	 * a string names a WP_Site_Health::get_test_* method, and anything else
+	 * is the callable a plugin handed in through the site_status_tests
+	 * filter. Plugins do use that form -- WooCommerce registers eleven of
+	 * its own tests as closures -- and concatenating one into a method name
+	 * is a fatal, not a skipped test.
+	 */
+	private static function resolve_site_health_test( $health, array $test ) {
+		$callback = $test['test'] ?? null;
+
+		if ( is_string( $callback ) ) {
+			$method = 'get_test_' . $callback;
+			return method_exists( $health, $method ) ? array( $health, $method ) : null;
+		}
+
+		return is_callable( $callback ) ? $callback : null;
 	}
 
 	public static function cb_site_health_info( $input ) {
