@@ -9,7 +9,7 @@
 **Current version: 2.9.0** (32 abilities) — [Download zip](https://github.com/bucagdas/wp-mcp-bridges/releases/download/wc-mcp-ability-v2.9.0/wc-mcp-ability.zip) · [Changelog](https://github.com/bucagdas/wp-mcp-bridges/releases/tag/wc-mcp-ability-v2.9.0)
 <!-- VERSION-LINE:END -->
 
-A WordPress plugin that exposes WooCommerce store management to AI agents as **MCP tools**, built on the [WordPress Abilities API](https://developer.wordpress.org/apis/abilities-api/). It registers 30 WooCommerce abilities — product-category/tag/variation CRUD, customer and coupon CRUD, order creation/refund, payment gateway listing/toggling, product image/taxonomy assignment, plus a generic `wc/v3` REST passthrough — and marks them public so the [WordPress MCP Adapter](https://github.com/WordPress/mcp-adapter) surfaces them to AI clients such as Claude.
+A WordPress plugin that exposes WooCommerce store management to AI agents as **MCP tools**, built on the [WordPress Abilities API](https://developer.wordpress.org/apis/abilities-api/). It registers 33 WooCommerce abilities — product-category/tag/variation CRUD, customer and coupon CRUD, order creation/refund/refund-preview, permalink settings, payment gateway listing/toggling, product image/taxonomy assignment, plus a generic `wc/v3` REST passthrough — and marks them public so the [WordPress MCP Adapter](https://github.com/WordPress/mcp-adapter) surfaces them to AI clients such as Claude.
 
 The abilities also register on the core Abilities REST API (`/wp-json/wp-abilities/v1/`), so you can call them over plain HTTP with an application password.
 
@@ -141,7 +141,8 @@ curl -u 'USER:APP_PASSWORD' -X DELETE \
 | `wc-mcp/update-coupon` | write | Update a coupon by `id`. |
 | `wc-mcp/delete-coupon` | destructive | Delete a coupon. Requires `confirm: true`. |
 | `wc-mcp/create-order` | write | Create an order with one or more line items. |
-| `wc-mcp/create-order-refund` | destructive | Refund an order. Requires `confirm: true`. |
+| `wc-mcp/create-order-refund` | destructive | Refund an order. Requires `confirm: true`. Pass `compute_totals: true` to let WooCommerce derive the amount from line item quantities instead of supplying it yourself (WooCommerce 11.1.0+). |
+| `wc-mcp/preview-order-refund` | read-only | What a refund would come to, without creating one: per-line breakdown, subtotal, tax, total and how much of the order is still refundable. Registered only on WooCommerce 11.1.0+. |
 | `wc-mcp/list-product-variations` | read-only | List the variations of a variable product. |
 | `wc-mcp/get-product-variation` | read-only | Full variation detail. |
 | `wc-mcp/create-product-variation` | write | Create a variation under a variable product. |
@@ -151,6 +152,8 @@ curl -u 'USER:APP_PASSWORD' -X DELETE \
 | `wc-mcp/toggle-payment-gateway` | write | Enable/disable a gateway. Never writes other settings. |
 | `wc-mcp/assign-product-terms` | write | Set a product's categories/tags (replaces the full assignment). |
 | `wc-mcp/update-product-images` | write | Set a product's featured image/gallery (replaces the full gallery). |
+| `wc-mcp/get-permalink-settings` | read-only | Read the product, category, tag, attribute and brand permalink bases, plus which preset the store is on and an example product URL. |
+| `wc-mcp/update-permalink-settings` | write | Set those bases. Rewrite rules are invalidated afterwards, so the new URLs work immediately rather than 404-ing until someone visits the Permalinks screen. |
 | `wc-mcp/wc-request` | destructive | Run any WooCommerce REST (`wc/v3`) request. Full store access; `confirm: true` required for POST/PUT/DELETE. |
 
 All writes read the value back after writing and return `{old, new}`. Destructive verbs require `confirm: true`.
@@ -163,9 +166,11 @@ All abilities require the `manage_woocommerce` capability and run **as the authe
 
 ## Tested versions
 
-- WordPress: 7.0
-- WooCommerce: 11.0
-- WordPress MCP Adapter: 0.5.0
+Last verified 4 September 2026.
+
+- WordPress: 7.1
+- WooCommerce: 11.1.0
+- WordPress MCP Adapter: 0.6.1
 
 ## About this fork
 
