@@ -5,7 +5,7 @@
     "author": "bucagdas",
     "homepage": "https://github.com/bucagdas/wp-mcp-bridges/tree/main/generatepress-mcp-ability",
     "requires": "7.0",
-    "tested": "7.0",
+    "tested": "7.1",
     "requires_php": "8.0",
     "download_url": "https://github.com/bucagdas/wp-mcp-bridges/releases/download/generatepress-mcp-ability-v1.4.1/generatepress-mcp-ability.zip",
     "last_updated": "2026-08-31 12:50:40",

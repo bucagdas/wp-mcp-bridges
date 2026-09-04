@@ -5,7 +5,7 @@
     "author": "bucagdas",
     "homepage": "https://github.com/bucagdas/wp-mcp-bridges/tree/main/contact-form-7-mcp-ability",
     "requires": "7.0",
-    "tested": "7.0",
+    "tested": "7.1",
     "requires_php": "8.0",
     "download_url": "https://github.com/bucagdas/wp-mcp-bridges/releases/download/contact-form-7-mcp-ability-v1.0.5/contact-form-7-mcp-ability.zip",
     "last_updated": "2026-08-09 08:53:04",

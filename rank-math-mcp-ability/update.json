@@ -5,7 +5,7 @@
     "author": "bucagdas",
     "homepage": "https://github.com/bucagdas/wp-mcp-bridges/tree/main/rank-math-mcp-ability",
     "requires": "7.0",
-    "tested": "7.0",
+    "tested": "7.1",
     "requires_php": "8.0",
     "download_url": "https://github.com/bucagdas/wp-mcp-bridges/releases/download/rank-math-mcp-ability-v2.1.0/rank-math-mcp-ability.zip",
     "last_updated": "2026-08-31 12:50:09",
