@@ -1,0 +1,974 @@
+<!doctype html>
+<html lang="en" data-lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WordPress MCP Bridges - Setup Guide</title>
+<meta name="description" content="How to connect your WordPress site to Claude, ChatGPT, VS Code, Cursor, Codex, Antigravity and other AI tools.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f6b63'/%3E%3Cpath d='M9 16h14' stroke='%23fbfbf9' stroke-width='2.4' stroke-linecap='round'/%3E%3Ccircle cx='9' cy='16' r='3.6' fill='%23fbfbf9'/%3E%3Ccircle cx='23' cy='16' r='3.6' fill='%23fbfbf9'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap">
+<style>
+:root{
+  --paper:#fbfbf9; --surface:#ffffff; --surface-2:#f2f5f4;
+  --ink:#151b1e; --ink-2:#3d4a4d; --muted:#66767a;
+  --rule:#dce3e1; --rule-strong:#c3cecb;
+  --accent:#0f6b63; --accent-ink:#0a4f49; --accent-soft:#e4f0ee;
+  --warn:#9d5420; --warn-soft:#faeee2; --warn-rule:#e6c9ab;
+  --code-bg:#f3f6f5; --code-ink:#1d2a2c;
+  --shadow:0 1px 2px rgba(21,27,30,.05), 0 8px 24px -16px rgba(21,27,30,.25);
+  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --serif:"IBM Plex Serif",ui-serif,Georgia,"Times New Roman",serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0e1417; --surface:#141c20; --surface-2:#1a2429;
+    --ink:#e7edeb; --ink-2:#b6c4c2; --muted:#8d9c9e;
+    --rule:#25322f; --rule-strong:#364744;
+    --accent:#54bcb0; --accent-ink:#7ed3c8; --accent-soft:#11302d;
+    --warn:#dfa066; --warn-soft:#2a2015; --warn-rule:#4a3a24;
+    --code-bg:#101a1d; --code-ink:#d6e2e0;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0e1417; --surface:#141c20; --surface-2:#1a2429;
+  --ink:#e7edeb; --ink-2:#b6c4c2; --muted:#8d9c9e;
+  --rule:#25322f; --rule-strong:#364744;
+  --accent:#54bcb0; --accent-ink:#7ed3c8; --accent-soft:#11302d;
+  --warn:#dfa066; --warn-soft:#2a2015; --warn-rule:#4a3a24;
+  --code-bg:#101a1d; --code-ink:#d6e2e0;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:5rem}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}
+  *{animation-duration:.01ms !important;transition-duration:.01ms !important}}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--serif);font-size:1.0625rem;line-height:1.7;
+  -webkit-font-smoothing:antialiased;
+}
+img{max-width:100%}
+
+/* ---------- bilingual switching ---------- */
+:root[data-lang="tr"] :where([lang="en"]){display:none}
+:root[data-lang="en"] :where([lang="tr"]){display:none}
+
+/* ---------- header ---------- */
+.masthead{
+  position:sticky;top:0;z-index:50;
+  background:color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter:saturate(1.6) blur(10px);
+  border-bottom:1px solid var(--rule);
+}
+.masthead-in{
+  max-width:78rem;margin:0 auto;padding:.7rem 1.25rem;
+  display:flex;align-items:center;gap:1rem;
+}
+.brand{
+  display:flex;align-items:baseline;gap:.55rem;
+  font-family:var(--sans);font-weight:600;letter-spacing:-.01em;
+  color:var(--ink);text-decoration:none;font-size:.98rem;
+}
+.brand .dot{
+  width:.5rem;height:.5rem;border-radius:50%;
+  background:var(--accent);flex:none;align-self:center;
+}
+.brand small{font-family:var(--mono);font-weight:400;font-size:.72rem;color:var(--muted)}
+.masthead-spacer{flex:1}
+.langpick{display:flex;align-items:center;gap:.5rem;flex:none}
+.globe{width:1.05rem;height:1.05rem;color:var(--muted);flex:none}
+.switch{
+  display:flex;border:1.5px solid var(--accent);border-radius:.45rem;
+  overflow:hidden;background:var(--surface);
+}
+.switch button{
+  font-family:var(--sans);font-size:.82rem;font-weight:500;letter-spacing:.01em;
+  padding:.4rem .82rem;border:0;background:transparent;color:var(--accent-ink);
+  cursor:pointer;line-height:1.45;transition:background .12s,color .12s;
+}
+.switch button:hover{background:var(--accent-soft)}
+@media (max-width:520px){
+  .globe{display:none}
+  .switch button{padding:.4rem .6rem;font-size:.78rem}
+}
+.switch button[aria-pressed="true"]{background:var(--accent);color:#fff}
+:root[data-theme="dark"] .switch button[aria-pressed="true"],
+:root:not([data-theme="light"]) .switch button[aria-pressed="true"]{color:#08110f}
+.switch button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+/* ---------- layout ---------- */
+.shell{max-width:78rem;margin:0 auto;padding:0 1.25rem}
+.cols{display:block}
+@media (min-width:1000px){
+  .cols{display:grid;grid-template-columns:15rem minmax(0,1fr);gap:3.5rem;align-items:start}
+}
+.toc{display:none}
+@media (min-width:1000px){
+  .toc{
+    display:block;position:sticky;top:4.4rem;
+    padding:2.5rem 0 3rem;font-family:var(--sans);font-size:.85rem;
+    max-height:calc(100vh - 5rem);overflow-y:auto;
+  }
+}
+.toc h2{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 .8rem;font-weight:500;
+}
+.toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.1rem}
+.toc a{
+  display:block;padding:.28rem .55rem;border-radius:.3rem;
+  color:var(--ink-2);text-decoration:none;border-left:2px solid transparent;
+}
+.toc a:hover{background:var(--surface-2);color:var(--ink)}
+.toc .sub a{padding-left:1.4rem;font-size:.8rem;color:var(--muted)}
+main{padding:2.5rem 0 6rem;min-width:0}
+.prose{max-width:41rem}
+
+/* ---------- type ---------- */
+h1,h2,h3,h4{font-family:var(--sans);text-wrap:balance;color:var(--ink);letter-spacing:-.018em}
+h1{font-size:clamp(1.9rem,1.3rem + 2.2vw,2.7rem);line-height:1.12;font-weight:600;margin:0 0 .6rem}
+h2{font-size:1.5rem;line-height:1.25;font-weight:600;margin:3.4rem 0 .9rem}
+h3{font-size:1.12rem;line-height:1.3;font-weight:600;margin:2.1rem 0 .5rem}
+h4{font-size:.95rem;font-weight:600;margin:1.4rem 0 .35rem}
+p{margin:0 0 1.05rem}
+.lede{font-size:1.17rem;line-height:1.6;color:var(--ink-2)}
+a{color:var(--accent-ink);text-underline-offset:.18em;text-decoration-thickness:.06em}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+strong{font-weight:600;color:var(--ink)}
+ul,ol{margin:0 0 1.05rem;padding-left:1.3rem}
+li{margin:.3rem 0}
+.eyebrow{
+  font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent-ink);margin:0 0 .5rem;font-weight:500;
+}
+hr{border:0;border-top:1px solid var(--rule);margin:3rem 0}
+
+/* ---------- code ---------- */
+code{
+  font-family:var(--mono);font-size:.86em;
+  background:var(--surface-2);padding:.12em .34em;border-radius:.25rem;
+  color:var(--code-ink);word-break:break-word;
+}
+.block{
+  position:relative;margin:0 0 1.2rem;
+  background:var(--code-bg);border:1px solid var(--rule);border-radius:.5rem;
+}
+.block-head{
+  display:flex;align-items:center;gap:.6rem;
+  padding:.45rem .7rem;border-bottom:1px solid var(--rule);
+}
+.block-head .path{
+  font-family:var(--mono);font-size:.72rem;color:var(--muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.block-head .grow{flex:1}
+.copy{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.05em;
+  border:1px solid var(--rule-strong);background:var(--surface);color:var(--muted);
+  padding:.2rem .5rem;border-radius:.3rem;cursor:pointer;flex:none;
+}
+.copy:hover{color:var(--ink);border-color:var(--muted)}
+.copy[data-done="1"]{color:var(--accent-ink);border-color:var(--accent)}
+.block pre{
+  margin:0;padding:.85rem .9rem;overflow-x:auto;
+  font-family:var(--mono);font-size:.815rem;line-height:1.65;color:var(--code-ink);
+}
+.block pre code{background:none;padding:0;font-size:inherit}
+.tok-key{color:var(--accent-ink)}
+.tok-str{color:var(--ink-2)}
+.tok-com{color:var(--muted);font-style:italic}
+
+/* ---------- steps ---------- */
+.step{display:grid;grid-template-columns:2.4rem minmax(0,1fr);gap:1.1rem;margin:0 0 2.6rem}
+.step-n{
+  font-family:var(--mono);font-size:.8rem;font-weight:500;
+  width:2.4rem;height:2.4rem;border-radius:50%;
+  display:grid;place-items:center;
+  background:var(--accent-soft);color:var(--accent-ink);
+  border:1px solid var(--accent);
+}
+.step-body{min-width:0}
+.step-body h3{margin-top:.28rem}
+
+/* ---------- callouts ---------- */
+.note,.warn{
+  border-radius:.5rem;padding:.85rem 1rem;margin:0 0 1.2rem;
+  font-size:.96rem;border:1px solid;
+}
+.note{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 35%,transparent);}
+.warn{background:var(--warn-soft);border-color:var(--warn-rule)}
+.note p:last-child,.warn p:last-child{margin-bottom:0}
+.note .tag,.warn .tag{
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;
+  display:block;margin-bottom:.3rem;font-weight:500;
+}
+.note .tag{color:var(--accent-ink)}
+.warn .tag{color:var(--warn)}
+
+/* ---------- personalizer ---------- */
+.setup{
+  background:var(--surface);border:1px solid var(--rule);border-radius:.6rem;
+  padding:1.1rem 1.15rem;margin:0 0 2rem;box-shadow:var(--shadow);
+}
+.setup h3{margin:0 0 .2rem;font-size:1rem}
+.setup p{font-size:.92rem;color:var(--muted);margin:0 0 .85rem}
+.fields{display:flex;flex-wrap:wrap;gap:.7rem}
+.field{display:flex;flex-direction:column;gap:.25rem;flex:1 1 13rem;min-width:0}
+.field label{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+}
+.field input{
+  font-family:var(--mono);font-size:.85rem;padding:.45rem .6rem;
+  border:1px solid var(--rule-strong);border-radius:.35rem;
+  background:var(--paper);color:var(--ink);min-width:0;width:100%;
+}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;margin:0 0 1.3rem;border:1px solid var(--rule);border-radius:.5rem}
+table{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:.87rem}
+th,td{text-align:left;padding:.55rem .75rem;border-bottom:1px solid var(--rule);vertical-align:top}
+thead th{
+  background:var(--surface-2);font-weight:600;font-size:.75rem;
+  letter-spacing:.04em;text-transform:uppercase;color:var(--muted);white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:0}
+td code{font-size:.82em;white-space:nowrap}
+
+/* ---------- tool cards ---------- */
+.tool{
+  border:1px solid var(--rule);border-radius:.6rem;background:var(--surface);
+  padding:1.15rem 1.2rem;margin:0 0 1.1rem;
+}
+.tool > h3{margin:0 0 .15rem;display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap}
+.pill{
+  font-family:var(--mono);font-size:.63rem;letter-spacing:.09em;text-transform:uppercase;
+  padding:.16rem .44rem;border-radius:.25rem;font-weight:500;white-space:nowrap;
+}
+.pill-local{background:var(--accent-soft);color:var(--accent-ink)}
+.pill-cloud{background:var(--warn-soft);color:var(--warn)}
+.tool .kicker{font-size:.9rem;color:var(--muted);margin:0 0 .8rem}
+.tool .block:last-child{margin-bottom:0}
+
+/* ---------- kinds ---------- */
+.kinds{display:grid;gap:1rem;margin:0 0 1.4rem}
+@media (min-width:680px){.kinds{grid-template-columns:1fr 1fr}}
+.kind{border:1px solid var(--rule);border-radius:.6rem;padding:1rem 1.05rem;background:var(--surface)}
+.kind h4{margin:.35rem 0 .4rem}
+.kind p{font-size:.92rem;margin:0 0 .6rem;color:var(--ink-2)}
+.kind ul{font-size:.9rem;margin:0;padding-left:1.15rem;color:var(--ink-2)}
+
+/* ---------- faq ---------- */
+.faq{border-top:1px solid var(--rule)}
+.faq > div{border-bottom:1px solid var(--rule);padding:1rem 0}
+.faq h3{margin:0 0 .3rem;font-size:1rem}
+.faq p{font-size:.95rem;margin:0 0 .5rem;color:var(--ink-2)}
+.faq p:last-child{margin-bottom:0}
+
+footer{
+  border-top:1px solid var(--rule);margin-top:4rem;padding:2rem 0 3rem;
+  font-family:var(--sans);font-size:.86rem;color:var(--muted);
+}
+footer a{color:var(--accent-ink)}
+.skip{position:absolute;left:-9999px}
+.skip:focus{left:1rem;top:.6rem;z-index:99;background:var(--surface);padding:.5rem .8rem;border-radius:.3rem;border:1px solid var(--accent)}
+</style>
+</head>
+<body>
+<a class="skip" href="#main"><span lang="tr">İçeriğe geç</span><span lang="en">Skip to content</span></a>
+
+<header class="masthead">
+  <div class="masthead-in">
+    <a class="brand" href="https://github.com/bucagdas/wp-mcp-bridges">
+      <span class="dot" aria-hidden="true"></span>
+      WordPress MCP Bridges <small>v5</small>
+    </a>
+    <span class="masthead-spacer"></span>
+    <div class="langpick">
+      <svg class="globe" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/>
+        <path d="M3 12h18M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"
+              stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+      </svg>
+      <div class="switch" role="group" aria-label="Language / Dil">
+        <button type="button" data-setlang="en" aria-pressed="true">English</button>
+        <button type="button" data-setlang="tr" aria-pressed="false">Türkçe</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="shell">
+<div class="cols">
+
+  <nav class="toc" aria-label="Contents">
+    <h2><span lang="tr">İçindekiler</span><span lang="en">Contents</span></h2>
+    <ol>
+      <li><a href="#mcp-nedir"><span lang="tr">MCP nedir?</span><span lang="en">What is MCP?</span></a></li>
+      <li><a href="#gereken"><span lang="tr">Başlamadan önce</span><span lang="en">Before you start</span></a></li>
+      <li><a href="#adimlar"><span lang="tr">Üç adım</span><span lang="en">Three steps</span></a></li>
+      <li class="sub"><a href="#adim-1"><span lang="tr">1 · Uygulama parolası</span><span lang="en">1 · App password</span></a></li>
+      <li class="sub"><a href="#adim-2"><span lang="tr">2 · Uç noktanız</span><span lang="en">2 · Your endpoint</span></a></li>
+      <li class="sub"><a href="#adim-3"><span lang="tr">3 · Çalıştığını görün</span><span lang="en">3 · Prove it works</span></a></li>
+      <li><a href="#iki-tur"><span lang="tr">İki tür istemci</span><span lang="en">Two kinds of client</span></a></li>
+      <li><a href="#alan-adlari"><span lang="tr">Alan adı farkları</span><span lang="en">Field-name differences</span></a></li>
+      <li><a href="#araclar"><span lang="tr">Araç araç kurulum</span><span lang="en">Tool by tool</span></a></li>
+      <li><a href="#mcp-remote"><span lang="tr">Desteklemeyen araçlar</span><span lang="en">Tools without HTTP</span></a></li>
+      <li><a href="#neler"><span lang="tr">Neler yapabilir?</span><span lang="en">What you get</span></a></li>
+      <li><a href="#sorunlar"><span lang="tr">Sorun giderme</span><span lang="en">Troubleshooting</span></a></li>
+      <li><a href="#guvenlik"><span lang="tr">Güvenlik</span><span lang="en">Security</span></a></li>
+    </ol>
+  </nav>
+
+  <main id="main">
+  <div class="prose">
+
+    <p class="eyebrow"><span lang="tr">Kurulum kılavuzu</span><span lang="en">Setup guide</span></p>
+    <h1>
+      <span lang="tr">WordPress sitenizi yapay zekâ aracınıza bağlayın</span>
+      <span lang="en">Connect your WordPress site to your AI tool</span>
+    </h1>
+    <p class="lede">
+      <span lang="tr">Bu sayfa, daha önce hiç MCP kullanmamış birinin sıfırdan bağlanabilmesi için yazıldı. Terminal bilmeniz gerekmiyor; gereken her komut hazır veriliyor. Üç adım sürüyor, sonra aracınızı seçip yapılandırmayı kopyalıyorsunuz.</span>
+      <span lang="en">This page is written for someone who has never used MCP. You don't need to know the terminal; every command you need is written out. It takes three steps, then you pick your tool and copy one config block.</span>
+    </p>
+
+    <div class="setup">
+      <h3><span lang="tr">Örnekleri kendi sitenize göre doldurun</span><span lang="en">Fill the examples in with your own site</span></h3>
+      <p>
+        <span lang="tr">Buraya yazdıklarınız sayfadaki tüm örneklere işlenir. Tarayıcınızdan çıkmaz, hiçbir yere gönderilmez. <strong>Parolanızı buraya yazmayın</strong>; ona sayfanın ihtiyacı yok.</span>
+        <span lang="en">What you type here is written into every example on the page. It never leaves your browser and is sent nowhere. <strong>Do not type your password here</strong> — the page has no need for it.</span>
+      </p>
+      <div class="fields">
+        <div class="field">
+          <label for="f-site"><span lang="tr">Site adresiniz</span><span lang="en">Your site address</span></label>
+          <input id="f-site" type="text" spellcheck="false" autocomplete="off" placeholder="https://bucagdas.com">
+        </div>
+        <div class="field">
+          <label for="f-user"><span lang="tr">WordPress kullanıcı adınız</span><span lang="en">Your WordPress username</span></label>
+          <input id="f-user" type="text" spellcheck="false" autocomplete="off" placeholder="yonetici">
+        </div>
+      </div>
+    </div>
+
+    <h2 id="mcp-nedir"><span lang="tr">MCP nedir, neden gerekiyor?</span><span lang="en">What is MCP, and why do you need it?</span></h2>
+    <p>
+      <span lang="tr">Yapay zekâ araçları kendi başlarına sizin sitenize erişemez. MCP (Model Context Protocol), bir yapay zekâ aracının dışarıdaki bir sisteme bağlanıp orada <em>iş yapabilmesi</em> için ortak bir dildir. USB'nin cihazlar için yaptığını, MCP yazılımlar için yapar: bir kez konuşulan bir standart.</span>
+      <span lang="en">AI tools cannot reach your site on their own. MCP (Model Context Protocol) is a shared language that lets an AI tool connect to an outside system and actually <em>do things</em> there. What USB did for devices, MCP does for software: one standard everyone speaks.</span>
+    </p>
+    <p>
+      <span lang="tr">Bu depodaki köprü eklentileri, WordPress'in yapabildiklerini bu dile çevirir. Kurduğunuzda siteniz, aracınızın bağlanabileceği bir <strong>uç noktaya</strong> sahip olur. Bağlandıktan sonra aracınız ürün oluşturabilir, yazı düzenleyebilir, SEO ayarı değiştirebilir; sizin adınıza ve sizin izin verdiğiniz kadar.</span>
+      <span lang="en">The bridge plugins in this repository translate what WordPress can do into that language. Once installed, your site gains an <strong>endpoint</strong> your tool can connect to. After that your tool can create products, edit posts, change SEO settings — as you, and only as far as your permissions allow.</span>
+    </p>
+    <div class="note">
+      <span class="tag"><span lang="tr">Kısaca</span><span lang="en">In short</span></span>
+      <p>
+        <span lang="tr">Köprüleri kurdunuz → siteniz bir adres yayınlıyor → aracınıza o adresi ve bir parola veriyorsunuz → araç sitenizi kullanabiliyor. Bu sayfa ikinci yarısını anlatıyor.</span>
+        <span lang="en">You installed the bridges → your site publishes an address → you hand that address and a password to your tool → the tool can use your site. This page covers the second half.</span>
+      </p>
+    </div>
+
+    <h2 id="gereken"><span lang="tr">Başlamadan önce</span><span lang="en">Before you start</span></h2>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th><span lang="tr">Gereken</span><span lang="en">Requirement</span></th>
+            <th><span lang="tr">Neden</span><span lang="en">Why</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span lang="tr"><strong>HTTPS</strong> ile çalışan bir site</span><span lang="en">A site served over <strong>HTTPS</strong></span></td>
+            <td><span lang="tr">WordPress uygulama parolalarını yalnız HTTPS üzerinden verir. Tek istisna yerel geliştirme ortamıdır.</span><span lang="en">WordPress only issues application passwords over HTTPS. The one exception is a local development environment.</span></td>
+          </tr>
+          <tr>
+            <td><span lang="tr"><strong>MCP Adapter</strong> eklentisi etkin</span><span lang="en"><strong>MCP Adapter</strong> plugin active</span></td>
+            <td><span lang="tr">Uç noktayı yayınlayan santral budur. Köprüler ona bağlanır. <a href="https://github.com/WordPress/mcp-adapter">WordPress/mcp-adapter</a></span><span lang="en">This is the switchboard that publishes the endpoint; the bridges plug into it. <a href="https://github.com/WordPress/mcp-adapter">WordPress/mcp-adapter</a></span></td>
+          </tr>
+          <tr>
+            <td><span lang="tr">En az bir <strong>köprü eklentisi</strong> etkin</span><span lang="en">At least one <strong>bridge plugin</strong> active</span></td>
+            <td><span lang="tr">Köprüler olmadan uç nokta çalışır ama ortada yapılacak iş olmaz.</span><span lang="en">Without a bridge the endpoint works but there is nothing for the tool to do.</span></td>
+          </tr>
+          <tr>
+            <td><span lang="tr">WordPress <strong>6.9</strong> veya üstü</span><span lang="en">WordPress <strong>6.9</strong> or newer</span></td>
+            <td><span lang="tr">Abilities API çekirdeğe o sürümde girdi. Köprüler 7.0+ ister, 7.1'e karşı test edilir.</span><span lang="en">The Abilities API landed in core in that release. The bridges require 7.0+ and are tested against 7.1.</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      <span lang="tr">Ayrıca <strong>hiçbir ek ayar gerekmez</strong>. Adapter etkinleştiği anda varsayılan sunucusunu kendisi kurar; açmanız gereken bir kutucuk, girmeniz gereken bir anahtar yoktur.</span>
+      <span lang="en">Beyond that, <strong>nothing needs configuring</strong>. The adapter builds its default server the moment it is activated; there is no box to tick and no key to enter.</span>
+    </p>
+
+    <h2 id="adimlar"><span lang="tr">Üç adım</span><span lang="en">Three steps</span></h2>
+
+    <div class="step" id="adim-1">
+      <div class="step-n">1</div>
+      <div class="step-body">
+        <h3><span lang="tr">Bir uygulama parolası oluşturun</span><span lang="en">Create an application password</span></h3>
+        <p>
+          <span lang="tr">Aracınıza normal WordPress parolanızı <em>vermezsiniz</em>. Bunun yerine sadece o araç için, istediğinizde tek başına iptal edebileceğiniz ayrı bir parola üretirsiniz.</span>
+          <span lang="en">You do <em>not</em> give your tool your normal WordPress password. Instead you mint a separate one for that tool alone, which you can revoke on its own whenever you like.</span>
+        </p>
+        <ol>
+          <li><span lang="tr">WordPress yönetim panelinde <strong>Kullanıcılar → Profil</strong> sayfasını açın.</span><span lang="en">In your WordPress admin, open <strong>Users → Profile</strong>.</span></li>
+          <li><span lang="tr">Sayfanın altındaki <strong>Uygulama Parolaları</strong> bölümüne inin.</span><span lang="en">Scroll down to <strong>Application Passwords</strong>.</span></li>
+          <li><span lang="tr">Bir ad yazın; hangi araç için olduğunu yazmak işinizi kolaylaştırır, örneğin <code>Claude Code</code>.</span><span lang="en">Type a name — naming the tool makes life easier later, e.g. <code>Claude Code</code>.</span></li>
+          <li><span lang="tr"><strong>Yeni Uygulama Parolası Ekle</strong>'ye basın ve çıkan parolayı kopyalayın.</span><span lang="en">Press <strong>Add New Application Password</strong> and copy the value it shows.</span></li>
+        </ol>
+        <div class="warn">
+          <span class="tag"><span lang="tr">Dikkat</span><span lang="en">Careful</span></span>
+          <p>
+            <span lang="tr">Parola yalnızca bir kez gösterilir; sayfadan ayrılınca bir daha göremezsiniz. Boşluklu görünür (<code>abcd EFGH 1234 …</code>); boşlukları silmenize gerek yok, WordPress onları yok sayar.</span>
+            <span lang="en">The password is shown once and never again after you leave the page. It appears with spaces (<code>abcd EFGH 1234 …</code>) — you don't need to strip them, WordPress ignores them.</span>
+          </p>
+        </div>
+        <p>
+          <span lang="tr"><strong>Uygulama Parolaları bölümünü göremiyorsanız</strong>, siteniz büyük olasılıkla HTTPS üzerinden çalışmıyordur. WordPress bu bölümü o durumda gizler.</span>
+          <span lang="en"><strong>If you can't see the Application Passwords section</strong>, your site is almost certainly not on HTTPS. WordPress hides the section in that case.</span>
+        </p>
+      </div>
+    </div>
+
+    <div class="step" id="adim-2">
+      <div class="step-n">2</div>
+      <div class="step-body">
+        <h3><span lang="tr">Uç noktanızı öğrenin</span><span lang="en">Find your endpoint</span></h3>
+        <p>
+          <span lang="tr">Adres her zaman sitenizin adresi artı sabit bir yoldur:</span>
+          <span lang="en">The address is always your site address plus one fixed path:</span>
+        </p>
+        <div class="block">
+          <div class="block-head"><span class="path">MCP endpoint</span><span class="grow"></span><button class="copy" type="button">Copy</button></div>
+          <pre><code><span class="js-site">https://bucagdas.com</span>/wp-json/mcp/mcp-adapter-default-server</code></pre>
+        </div>
+        <p>
+          <span lang="tr">Bu adresi tarayıcıya yapıştırırsanız hata görürsünüz; bu normaldir. Uç nokta yalnız POST isteklerine yanıt verir, tarayıcı ise GET gönderir.</span>
+          <span lang="en">Pasting that into a browser shows an error — that is expected. The endpoint only answers POST requests, and a browser sends GET.</span>
+        </p>
+        <div class="note">
+          <span class="tag"><span lang="tr">Kalıcı bağlantılar “düz” ise</span><span lang="en">If your permalinks are “plain”</span></span>
+          <p>
+            <span lang="tr">Ayarlar → Kalıcı Bağlantılar sayfasında “Düz” seçiliyse yukarıdaki adres çalışmaz. Bu biçimi kullanın:</span>
+            <span lang="en">If Settings → Permalinks is set to “Plain”, the address above won't resolve. Use this form instead:</span>
+          </p>
+          <div class="block" style="margin-top:.7rem">
+            <div class="block-head"><span class="path">plain permalinks</span><span class="grow"></span><button class="copy" type="button">Copy</button></div>
+            <pre><code><span class="js-site">https://bucagdas.com</span>/?rest_route=/mcp/mcp-adapter-default-server</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" id="adim-3">
+      <div class="step-n">3</div>
+      <div class="step-body">
+        <h3><span lang="tr">Çalıştığını görün</span><span lang="en">Prove it works</span></h3>
+        <p>
+          <span lang="tr">Aracınızı yapılandırmadan önce uç noktanın canlı olduğunu doğrulayın. Aşağıdaki komutu terminale yapıştırın; <code>PAROLA</code> yerine 1. adımdaki parolayı yazın.</span>
+          <span lang="en">Before configuring any tool, confirm the endpoint is alive. Paste the command below into a terminal, replacing <code>PASSWORD</code> with the one from step 1.</span>
+        </p>
+        <div class="block">
+          <div class="block-head"><span class="path">terminal</span><span class="grow"></span><button class="copy" type="button">Copy</button></div>
+          <pre><code>curl -u "<span class="js-user">yonetici</span>:PAROLA" \
+  -X POST "<span class="js-site">https://bucagdas.com</span>/wp-json/mcp/mcp-adapter-default-server" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize",
+       "params":{"protocolVersion":"2025-06-18","capabilities":{},
+                 "clientInfo":{"name":"test","version":"1"}}}'</code></pre>
+        </div>
+        <p><span lang="tr">Şuna benzer bir yanıt gelmelidir:</span><span lang="en">You should get back something like this:</span></p>
+        <div class="block">
+          <div class="block-head"><span class="path"><span lang="tr">beklenen yanıt</span><span lang="en">expected response</span></span><span class="grow"></span></div>
+          <pre><code>{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18",
+ "serverInfo":{"name":"MCP Adapter Default Server","version":"v1.0.0"}}}</code></pre>
+        </div>
+        <p>
+          <span lang="tr">Bunu gördüyseniz iş bitti sayılır; geri kalanı aracınıza aynı iki bilgiyi vermekten ibaret. <code>401</code> aldıysanız kullanıcı adı veya parola yanlıştır. <code>404</code> aldıysanız adres yanlıştır ya da adapter etkin değildir.</span>
+          <span lang="en">If you see that, the hard part is done; the rest is handing your tool the same two pieces of information. A <code>401</code> means the username or password is wrong. A <code>404</code> means the address is wrong or the adapter isn't active.</span>
+        </p>
+      </div>
+    </div>
+
+    <h2 id="iki-tur"><span lang="tr">İki tür istemci - hangisi olduğunu bilin</span><span lang="en">Two kinds of client — know which you have</span></h2>
+    <p>
+      <span lang="tr">Araçlar sitenize <strong>iki farklı yerden</strong> bağlanır ve bu fark, sizin için işe yarayıp yaramayacağını belirler. Aracınızı seçmeden önce bunu okuyun; kurulumdaki hayal kırıklıklarının çoğu buradan çıkar.</span>
+      <span lang="en">Tools reach your site from <strong>one of two places</strong>, and that difference decides whether a given tool will work for you at all. Read this before picking one; most setup frustration starts here.</span>
+    </p>
+    <div class="kinds">
+      <div class="kind">
+        <span class="pill pill-local"><span lang="tr">Sizin bilgisayarınızdan</span><span lang="en">From your machine</span></span>
+        <h4><span lang="tr">Yerel istemciler</span><span lang="en">Local clients</span></h4>
+        <p><span lang="tr">Claude Code, VS Code, Cursor, Windsurf, Codex, Antigravity, Gemini CLI, Zed, Cline…</span><span lang="en">Claude Code, VS Code, Cursor, Windsurf, Codex, Antigravity, Gemini CLI, Zed, Cline…</span></p>
+        <ul>
+          <li><span lang="tr">Bağlantıyı sizin makineniz kurar.</span><span lang="en">Your machine makes the connection.</span></li>
+          <li><span lang="tr">Uygulama parolanız <code>Authorization</code> başlığıyla doğrudan çalışır.</span><span lang="en">Your application password works directly, via an <code>Authorization</code> header.</span></li>
+          <li><span lang="tr"><strong>Yerel site, VPN arkası veya intranet siteleri de çalışır.</strong></span><span lang="en"><strong>Local, VPN-only and intranet sites all work.</strong></span></li>
+        </ul>
+      </div>
+      <div class="kind">
+        <span class="pill pill-cloud"><span lang="tr">Satıcının bulutundan</span><span lang="en">From the vendor's cloud</span></span>
+        <h4><span lang="tr">Bulut bağlayıcıları</span><span lang="en">Cloud connectors</span></h4>
+        <p><span lang="tr">Claude uygulaması ve claude.ai'daki “Connectors”, ChatGPT'deki “Apps / Developer mode”…</span><span lang="en">The Claude app and claude.ai “Connectors”, ChatGPT's “Apps / Developer mode”…</span></p>
+        <ul>
+          <li><span lang="tr">Bağlantıyı Anthropic'in ya da OpenAI'ın sunucuları kurar, sizin bilgisayarınız değil.</span><span lang="en">Anthropic's or OpenAI's servers make the connection, not your computer.</span></li>
+          <li><span lang="tr">Siteniz <strong>internetten erişilebilir</strong> olmalıdır. <code>localhost</code> ve VPN arkası siteler çalışmaz.</span><span lang="en">Your site must be <strong>reachable from the public internet</strong>. <code>localhost</code> and VPN-only sites will not work.</span></li>
+          <li><span lang="tr">Bu arayüzler kimlik doğrulama için genelde OAuth bekler; uygulama parolası girecek alan sunmazlar.</span><span lang="en">These interfaces generally expect OAuth and give you no field for an application password.</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="warn">
+      <span class="tag"><span lang="tr">Bunu bilmezseniz vakit kaybedersiniz</span><span lang="en">Not knowing this costs you an afternoon</span></span>
+      <p>
+        <span lang="tr">Köprüler kimlik doğrulaması için <strong>uygulama parolası</strong> kullanır, OAuth değil. Yani bulut bağlayıcı arayüzlerine (Claude uygulamasındaki “Custom connector”, ChatGPT'deki “Create app”) doğrudan uymaz. Masaüstünde Claude kullanıyorsanız çözüm basit: <strong>Claude Code</strong> yerel bir istemcidir ve doğrudan çalışır. Aynı makinede ikisi de kuruludur.</span>
+        <span lang="en">The bridges authenticate with an <strong>application password</strong>, not OAuth. That means they don't drop straight into the cloud connector interfaces (“Custom connector” in the Claude app, “Create app” in ChatGPT). If you're on the desktop, the fix is easy: <strong>Claude Code</strong> is a local client and works directly, and it lives on the same machine.</span>
+      </p>
+    </div>
+
+    <h2 id="alan-adlari"><span lang="tr">Aynı şey, farklı isim</span><span lang="en">Same thing, different name</span></h2>
+    <p>
+      <span lang="tr">Tüm araçlar aynı uç noktaya bağlanır ama yapılandırma dosyasında <strong>adresi tutan alanın adı</strong> araçtan araca değişir. Bir örneği başka bir araca kopyalayıp “çalışmıyor” demenin en sık sebebi budur. Aşağıdaki tablo hangi aracın hangi adı istediğini gösteriyor.</span>
+      <span lang="en">Every tool connects to the same endpoint, but <strong>the name of the field that holds the address</strong> differs between them. Copying an example from one tool into another and finding it “doesn't work” almost always comes down to this. Here is which tool wants which name.</span>
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th><span lang="tr">Araç</span><span lang="en">Tool</span></th>
+            <th><span lang="tr">Alan</span><span lang="en">Field</span></th>
+            <th><span lang="tr">Yapılandırma dosyası</span><span lang="en">Config file</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Claude Code</td><td><code>url</code></td><td><code>.mcp.json</code> · <code>claude mcp add</code></td></tr>
+          <tr><td>Cursor</td><td><code>url</code></td><td><code>~/.cursor/mcp.json</code></td></tr>
+          <tr><td>VS Code</td><td><code>url</code> + <code>type</code></td><td><code>.vscode/mcp.json</code></td></tr>
+          <tr><td>Codex CLI</td><td><code>url</code></td><td><code>~/.codex/config.toml</code></td></tr>
+          <tr><td>Windsurf</td><td><code>serverUrl</code></td><td><code>~/.codeium/windsurf/mcp_config.json</code></td></tr>
+          <tr><td>Antigravity</td><td><code>serverUrl</code></td><td><code>~/.gemini/config/mcp_config.json</code></td></tr>
+          <tr><td>Gemini CLI</td><td><code>httpUrl</code></td><td><code>~/.gemini/settings.json</code></td></tr>
+          <tr><td>Zed</td><td><code>context_servers</code></td><td><code>~/.config/zed/settings.json</code></td></tr>
+          <tr><td>Cline / Roo</td><td><code>url</code></td><td><code>cline_mcp_settings.json</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <span class="tag"><span lang="tr">En sık yapılan hata</span><span lang="en">The most common mistake</span></span>
+      <p>
+        <span lang="tr">Gemini CLI'da <code>url</code> yazarsanız hata almazsınız; araçlar sessizce görünmez. <code>httpUrl</code> olmak zorunda.</span>
+        <span lang="en">Writing <code>url</code> in Gemini CLI produces no error — your tools just silently never appear. It has to be <code>httpUrl</code>.</span>
+      </p>
+    </div>
+
+    <h2 id="araclar"><span lang="tr">Araç araç kurulum</span><span lang="en">Tool by tool</span></h2>
+    <p>
+      <span lang="tr">Her örnekte <code>PAROLA</code> yerine 1. adımda ürettiğiniz uygulama parolasını yazın. Boşlukları silebilir ya da olduğu gibi bırakabilirsiniz.</span>
+      <span lang="en">In every example, replace <code>PASSWORD</code> with the application password from step 1. You can strip the spaces or leave them in.</span>
+    </p>
+
+    <div class="tool">
+      <h3>Claude Code <span class="pill pill-local"><span lang="tr">yerel</span><span lang="en">local</span></span></h3>
+      <p class="kicker"><span lang="tr">Tek komut yeter, dosya düzenlemeniz gerekmez.</span><span lang="en">One command; no file to edit.</span></p>
+      <div class="block">
+        <div class="block-head"><span class="path">terminal</span><span class="grow"></span><button class="copy" type="button">Copy</button></div>
+        <pre><code>claude mcp add --transport http wordpress \
+  "<span class="js-site">https://bucagdas.com</span>/wp-json/mcp/mcp-adapter-default-server" \
+  --header "Authorization: Basic $(printf '%s' '<span class="js-user">yonetici</span>:PAROLA' | base64)"</code></pre>
+      </div>
+      <p class="kicker">
+        <span lang="tr">Ardından <code>claude mcp list</code> ile bağlandığını görün. Yeniden başlatmaya gerek yok.</span>
+        <span lang="en">Then run <code>claude mcp list</code> to confirm. No restart needed.</span>
+      </p>
+    </div>
+
+    <div class="tool">
+      <h3>VS Code <span class="pill pill-local"><span lang="tr">yerel</span><span lang="en">local</span></span></h3>
+      <p class="kicker">
+        <span lang="tr">Projenizde <code>.vscode/mcp.json</code> oluşturun. <code>type</code> alanı VS Code'da <strong>zorunludur</strong>.</span>
+        <span lang="en">Create <code>.vscode/mcp.json</code> in your project. The <code>type</code> field is <strong>required</strong> in VS Code.</span>
+      </p>
+      <div class="block">
+        <div class="block-head"><span class="path">.vscode/mcp.json</span><span class="grow"></span><button class="copy" type="button">Copy</button></div>
+        <pre><code>{
+  <span class="tok-key">"servers"</span>: {
+    <span class="tok-key">"wordpress"</span>: {
+      <span class="tok-key">"type"</span>: <span class="tok-str">"http"</span>,
+      <span class="tok-key">"url"</span>: <span class="tok-str">"<span class="js-site">https://bucagdas.com</span>/wp-json/mcp/mcp-adapter-default-server"</span>,
+      <span class="tok-key">"headers"</span>: {
+        <span class="tok-key">"Authorization"</span>: <span class="tok-str">"Basic BASE64_KULLANICI_PAROLA"</span>
+      }
+    }
+  }
+}</code></pre>
+      </div>
+      <div class="warn">
+        <span class="tag"><span lang="tr">Unutmayın</span><span lang="en">Don't forget</span></span>
+        <p>
+          <span lang="tr">Copilot sohbetini <strong>Ask</strong>'ten <strong>Agent</strong>'a almazsanız araçlar görünmez. Yapılandırma doğru olsa bile.</span>
+          <span lang="en">If you leave Copilot chat on <strong>Ask</strong> instead of <strong>Agent</strong>, the tools never appear — even with a correct config.</span>
+        </p>
+      </div>
+    </div>
+
+    <div class="tool">
+      <h3>Cursor <span class="pill pill-local"><span lang="tr">yerel</span><span lang="en">local</span></span></h3>
+      <div class="block">
+        <div class="block-head"><span class="path">~/.cursor/mcp.json</span><span class="grow"></span><button class="copy" type="button">Copy</button></div>
+        <pre><code>{
+  <span class="tok-key">"mcpServers"</span>: {
+    <span class="tok-key">"wordpress"</span>: {
+      <span class="tok-key">"url"</span>: <span class="tok-str">"<span class="js-site">https://bucagdas.com</span>/wp-json/mcp/mcp-adapter-default-server"</span>,
+      <span class="tok-key">"headers"</span>: {
+        <span class="tok-key">"Authorization"</span>: <span class="tok-str">"Basic BASE64_KULLANICI_PAROLA"</span>
+      }
+    }
+  }
+}</code></pre>
+      </div>
+    </div>
+
+    <div class="tool">
+      <h3>Windsurf <span class="pill pill-local"><span lang="tr">yerel</span><span lang="en">local</span></span></h3>
+      <p class="kicker"><span lang="tr">Dikkat: <code>url</code> değil, <code>serverUrl</code>.</span><span lang="en">Note: <code>serverUrl</code>, not <code>url</code>.</span></p>
+      <div class="block">
+        <div class="block-head"><span class="path">~/.codeium/windsurf/mcp_config.json</span><span class="grow"></span><button class="copy" type="button">Copy</button></div>
+        <pre><code>{
+  <span class="tok-key">"mcpServers"</span>: {
+    <span class="tok-key">"wordpress"</span>: {
+      <span class="tok-key">"serverUrl"</span>: <span class="tok-str">"<span class="js-site">https://bucagdas.com</span>/wp-json/mcp/mcp-adapter-default-server"</span>,
+      <span class="tok-key">"headers"</span>: {
+        <span class="tok-key">"Authorization"</span>: <span class="tok-str">"Basic BASE64_KULLANICI_PAROLA"</span>
+      }
+    }
+  }
+}</code></pre>
+      </div>
+    </div>
+
+    <div class="tool">
+      <h3>OpenAI Codex CLI <span class="pill pill-local"><span lang="tr">yerel</span><span lang="en">local</span></span></h3>
+      <p class="kicker">
+        <span lang="tr">Codex yapılandırmayı TOML biçiminde tutar. <code>url</code> yazmanız onu uzak sunucu olarak tanımasına yeter.</span>
+        <span lang="en">Codex keeps its config in TOML. Writing <code>url</code> is what tells it this is a remote server.</span>
+      </p>
+      <div class="block">
+        <div class="block-head"><span class="path">~/.codex/config.toml</span><span class="grow"></span><button class="copy" type="button">Copy</button></div>
+        <pre><code><span class="tok-com">[mcp_servers.wordpress]</span>
+url = <span class="tok-str">"<span class="js-site">https://bucagdas.com</span>/wp-json/mcp/mcp-adapter-default-server"</span>
+
+<span class="tok-com">[mcp_servers.wordpress.http_headers]</span>
+Authorization = <span class="tok-str">"Basic BASE64_KULLANICI_PAROLA"</span></code></pre>
+      </div>
+    </div>
+
+    <div class="tool">
+      <h3>Google Antigravity <span class="pill pill-local"><span lang="tr">yerel</span><span lang="en">local</span></span></h3>
+      <p class="kicker">
+        <span lang="tr">IDE ve CLI aynı dosyayı paylaşır. Arayüzden gitmek isterseniz: ajan panelinde <strong>…</strong> → <strong>MCP Servers</strong> → <strong>Manage MCP Servers</strong> → <strong>View raw config</strong>.</span>
+        <span lang="en">The IDE and CLI share one file. To get there through the interface: <strong>…</strong> in the agent panel → <strong>MCP Servers</strong> → <strong>Manage MCP Servers</strong> → <strong>View raw config</strong>.</span>
+      </p>
+      <div class="block">
+        <div class="block-head"><span class="path">~/.gemini/config/mcp_config.json</span><span class="grow"></span><button class="copy" type="button">Copy</button></div>
+        <pre><code>{
+  <span class="tok-key">"mcpServers"</span>: {
+    <span class="tok-key">"wordpress"</span>: {
+      <span class="tok-key">"serverUrl"</span>: <span class="tok-str">"<span class="js-site">https://bucagdas.com</span>/wp-json/mcp/mcp-adapter-default-server"</span>,
+      <span class="tok-key">"headers"</span>: {
+        <span class="tok-key">"Authorization"</span>: <span class="tok-str">"Basic BASE64_KULLANICI_PAROLA"</span>
+      }
+    }
+  }
+}</code></pre>
+      </div>
+    </div>
+
+    <div class="tool">
+      <h3>Gemini CLI <span class="pill pill-local"><span lang="tr">yerel</span><span lang="en">local</span></span></h3>
+      <p class="kicker">
+        <span lang="tr"><strong>Buradaki alan adı <code>httpUrl</code>.</strong> <code>url</code> yazarsanız hata almaz, araçlar sadece hiç görünmez.</span>
+        <span lang="en"><strong>The field here is <code>httpUrl</code>.</strong> Write <code>url</code> and you get no error — the tools simply never show up.</span>
+      </p>
+      <div class="block">
+        <div class="block-head"><span class="path">~/.gemini/settings.json</span><span class="grow"></span><button class="copy" type="button">Copy</button></div>
+        <pre><code>{
+  <span class="tok-key">"mcpServers"</span>: {
+    <span class="tok-key">"wordpress"</span>: {
+      <span class="tok-key">"httpUrl"</span>: <span class="tok-str">"<span class="js-site">https://bucagdas.com</span>/wp-json/mcp/mcp-adapter-default-server"</span>,
+      <span class="tok-key">"headers"</span>: {
+        <span class="tok-key">"Authorization"</span>: <span class="tok-str">"Basic BASE64_KULLANICI_PAROLA"</span>
+      }
+    }
+  }
+}</code></pre>
+      </div>
+    </div>
+
+    <div class="tool">
+      <h3>Cline / Roo Code <span class="pill pill-local"><span lang="tr">yerel</span><span lang="en">local</span></span></h3>
+      <p class="kicker">
+        <span lang="tr">VS Code eklentisi olarak çalışır ve kendi dosyasını kullanır. Eklentideki <strong>MCP Servers → Configure</strong> düğmesi bu dosyayı açar.</span>
+        <span lang="en">Runs as a VS Code extension with its own file. The extension's <strong>MCP Servers → Configure</strong> button opens it.</span>
+      </p>
+      <div class="block">
+        <div class="block-head"><span class="path">cline_mcp_settings.json</span><span class="grow"></span><button class="copy" type="button">Copy</button></div>
+        <pre><code>{
+  <span class="tok-key">"mcpServers"</span>: {
+    <span class="tok-key">"wordpress"</span>: {
+      <span class="tok-key">"url"</span>: <span class="tok-str">"<span class="js-site">https://bucagdas.com</span>/wp-json/mcp/mcp-adapter-default-server"</span>,
+      <span class="tok-key">"headers"</span>: {
+        <span class="tok-key">"Authorization"</span>: <span class="tok-str">"Basic BASE64_KULLANICI_PAROLA"</span>
+      }
+    }
+  }
+}</code></pre>
+      </div>
+    </div>
+
+    <div class="tool">
+      <h3>Claude <span lang="tr">masaüstü ve web</span><span lang="en">desktop and web</span> <span class="pill pill-cloud"><span lang="tr">bulut</span><span lang="en">cloud</span></span></h3>
+      <p class="kicker">
+        <span lang="tr">Claude uygulamasındaki <strong>Custom connector</strong> alanı yalnız adres ister; uygulama parolası giremezsiniz ve bağlantı Anthropic'in sunucularından kurulur.</span>
+        <span lang="en">The <strong>Custom connector</strong> field in the Claude app takes only an address; there is nowhere to put an application password, and the connection is made from Anthropic's servers.</span>
+      </p>
+      <p>
+        <span lang="tr">Dolayısıyla bu köprüler o alana doğrudan uymaz. İki yolunuz var:</span>
+        <span lang="en">So these bridges don't drop straight into that field. You have two options:</span>
+      </p>
+      <ul>
+        <li>
+          <span lang="tr"><strong>Claude Code'u kullanın.</strong> Aynı bilgisayarda, aynı hesapla çalışır, yerel istemcidir ve yukarıdaki tek komutla bağlanır. Çoğu kişi için doğru cevap budur.</span>
+          <span lang="en"><strong>Use Claude Code.</strong> Same machine, same account, and being a local client it connects with the single command above. For most people this is the right answer.</span>
+        </li>
+        <li>
+          <span lang="tr"><strong>Önüne OAuth koyun.</strong> Uç noktayı OAuth ile koruyan bir vekil sunucu yazarsanız bağlayıcı alanı çalışır. Bu ayrı bir iştir ve bu sayfanın kapsamı dışındadır.</span>
+          <span lang="en"><strong>Put OAuth in front of it.</strong> A proxy that fronts the endpoint with OAuth will satisfy the connector field. That is a separate piece of work and out of scope here.</span>
+        </li>
+      </ul>
+    </div>
+
+    <div class="tool">
+      <h3>ChatGPT <span class="pill pill-cloud"><span lang="tr">bulut</span><span lang="en">cloud</span></span></h3>
+      <p class="kicker">
+        <span lang="tr">Ayarlar → <strong>Security and login</strong> → <strong>Developer mode</strong> açıldıktan sonra <strong>Create app</strong> ile bir adres eklenir (Plus ve Pro planları).</span>
+        <span lang="en">Settings → <strong>Security and login</strong> → turn on <strong>Developer mode</strong>, then <strong>Create app</strong> and paste an address (Plus and Pro plans).</span>
+      </p>
+      <p>
+        <span lang="tr">Claude'un bağlayıcılarıyla aynı iki kısıt geçerlidir: siteniz internetten erişilebilir olmalı ve kimlik doğrulama OAuth ya da açık erişim olmalıdır. Uygulama parolası girecek bir alan yoktur. Sitesi yerelde duran veya OAuth kurmak istemeyen biri için ChatGPT bugün uygun bir istemci değildir.</span>
+        <span lang="en">The same two constraints as Claude's connectors apply: your site must be reachable from the internet, and authentication must be OAuth or open. There is no field for an application password. For anyone whose site is local, or who doesn't want to stand up OAuth, ChatGPT is not a suitable client today.</span>
+      </p>
+    </div>
+
+    <h2 id="mcp-remote"><span lang="tr">Aracınız uzak sunucu desteklemiyorsa</span><span lang="en">If your tool has no HTTP support</span></h2>
+    <p>
+      <span lang="tr">Bazı araçlar yalnız kendi bilgisayarında program çalıştırarak bağlanabilir (buna <em>stdio</em> denir), adres kabul etmez. Bu durumda <code>mcp-remote</code> aradaki çeviriciyi yapar: yerelde çalışır, sizin adınıza uzaktaki uç noktaya gider.</span>
+      <span lang="en">Some tools can only connect by launching a program on your own computer (this is called <em>stdio</em>) and won't take an address. <code>mcp-remote</code> is the translator: it runs locally and talks to the remote endpoint on your behalf.</span>
+    </p>
+    <div class="block">
+      <div class="block-head"><span class="path">mcpServers</span><span class="grow"></span><button class="copy" type="button">Copy</button></div>
+      <pre><code>{
+  <span class="tok-key">"mcpServers"</span>: {
+    <span class="tok-key">"wordpress"</span>: {
+      <span class="tok-key">"command"</span>: <span class="tok-str">"npx"</span>,
+      <span class="tok-key">"args"</span>: [
+        <span class="tok-str">"-y"</span>, <span class="tok-str">"mcp-remote"</span>,
+        <span class="tok-str">"<span class="js-site">https://bucagdas.com</span>/wp-json/mcp/mcp-adapter-default-server"</span>,
+        <span class="tok-str">"--header"</span>, <span class="tok-str">"Authorization:Basic BASE64_KULLANICI_PAROLA"</span>
+      ]
+    }
+  }
+}</code></pre>
+    </div>
+    <div class="warn">
+      <span class="tag"><span lang="tr">İki nokta üstü üstünden sonra boşluk bırakmayın</span><span lang="en">No space after the colon</span></span>
+      <p>
+        <span lang="tr"><code>"Authorization: Basic …"</code> değil, <code>"Authorization:Basic …"</code> yazın. Bazı araçlar <code>npx</code>'e argüman geçerken boşlukları kaçırmıyor ve değer bozuluyor. Node.js kurulu olmalıdır.</span>
+        <span lang="en">Write <code>"Authorization:Basic …"</code>, not <code>"Authorization: Basic …"</code>. Some tools fail to escape spaces when invoking <code>npx</code> and the value gets mangled. Node.js must be installed.</span>
+      </p>
+    </div>
+    <h3><span lang="tr">Base64 değerini nasıl üretirim?</span><span lang="en">How do I produce the base64 value?</span></h3>
+    <p><span lang="tr">Yukarıdaki örneklerde geçen <code>BASE64_KULLANICI_PAROLA</code> değerini şu komut üretir:</span><span lang="en">This command produces the <code>BASE64_USER_PASSWORD</code> value used in the examples above:</span></p>
+    <div class="block">
+      <div class="block-head"><span class="path">macOS · Linux</span><span class="grow"></span><button class="copy" type="button">Copy</button></div>
+      <pre><code>printf '%s' '<span class="js-user">yonetici</span>:PAROLA' | base64</code></pre>
+    </div>
+    <div class="block">
+      <div class="block-head"><span class="path">Windows PowerShell</span><span class="grow"></span><button class="copy" type="button">Copy</button></div>
+      <pre><code>[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('<span class="js-user">yonetici</span>:PAROLA'))</code></pre>
+    </div>
+
+    <h2 id="neler"><span lang="tr">Bağlandıktan sonra ne yapabilir?</span><span lang="en">What can it do once connected?</span></h2>
+    <p>
+      <span lang="tr">Aracınız üç yardımcı araç görür: <code>discover-abilities</code> (neler yapılabileceğini listeler), <code>get-ability-info</code> (birinin ayrıntısını verir) ve <code>execute-ability</code> (çalıştırır). Bunlar kapıdır; asıl işi köprüler yapar.</span>
+      <span lang="en">Your tool sees three helpers: <code>discover-abilities</code> (lists what can be done), <code>get-ability-info</code> (details one of them) and <code>execute-ability</code> (runs it). Those are the door; the bridges do the actual work.</span>
+    </p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th><span lang="tr">Köprü</span><span lang="en">Bridge</span></th>
+            <th><span lang="tr">Fiil</span><span lang="en">Abilities</span></th>
+            <th><span lang="tr">Kapsam</span><span lang="en">Covers</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><a href="https://github.com/bucagdas/wp-mcp-bridges/tree/main/wp-core-mcp-ability">WP Core</a></td><td>59</td><td><span lang="tr">Yazı, sayfa, medya, kullanıcı, menü, ayar, site sağlığı</span><span lang="en">Posts, pages, media, users, menus, options, site health</span></td></tr>
+          <tr><td><a href="https://github.com/bucagdas/wp-mcp-bridges/tree/main/generatepress-mcp-ability">GeneratePress</a></td><td>49</td><td><span lang="tr">Tema ayarları, Elements, renkler, GenerateBlocks</span><span lang="en">Theme settings, Elements, colours, GenerateBlocks</span></td></tr>
+          <tr><td><a href="https://github.com/bucagdas/wp-mcp-bridges/tree/main/wc-mcp-ability">WooCommerce</a></td><td>33</td><td><span lang="tr">Ürün, varyasyon, sipariş, iade, müşteri, kupon</span><span lang="en">Products, variations, orders, refunds, customers, coupons</span></td></tr>
+          <tr><td><a href="https://github.com/bucagdas/wp-mcp-bridges/tree/main/rank-math-mcp-ability">Rank Math</a></td><td>24</td><td><span lang="tr">SEO ayarları, yönlendirmeler, site haritası, 404 kayıtları</span><span lang="en">SEO settings, redirections, sitemap, 404 log</span></td></tr>
+          <tr><td><a href="https://github.com/bucagdas/wp-mcp-bridges/tree/main/contact-form-7-mcp-ability">Contact Form 7</a></td><td>19</td><td><span lang="tr">Form oluşturma, düzenleme, e-posta ayarları</span><span lang="en">Creating and editing forms, mail settings</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      <span lang="tr">Başlamak için aracınıza şunu sorun: <em>“WordPress sitemde neler yapabilirsin?”</em>; listeyi kendisi çıkarır.</span>
+      <span lang="en">To get started, ask your tool: <em>“What can you do on my WordPress site?”</em> — it will enumerate the list itself.</span>
+    </p>
+
+    <h2 id="sorunlar"><span lang="tr">Sorun giderme</span><span lang="en">Troubleshooting</span></h2>
+    <div class="faq">
+      <div>
+        <h3><span lang="tr">Araç bağlanıyor ama hiç araç görünmüyor</span><span lang="en">It connects but no tools appear</span></h3>
+        <p><span lang="tr">Üç sık sebep: (1) Gemini CLI'da <code>url</code> yazılmış, <code>httpUrl</code> olmalı. (2) VS Code'da sohbet <strong>Agent</strong> modunda değil. (3) Sitede etkin bir köprü eklentisi yok; adapter tek başına yapacak iş bulamaz.</span><span lang="en">Three common causes: (1) <code>url</code> written in Gemini CLI where it must be <code>httpUrl</code>. (2) VS Code chat not switched to <strong>Agent</strong> mode. (3) No bridge plugin active on the site — the adapter alone has nothing to offer.</span></p>
+      </div>
+      <div>
+        <h3>401 <span lang="tr">alıyorum</span><span lang="en">responses</span></h3>
+        <p><span lang="tr">Kullanıcı adı veya uygulama parolası yanlış. Normal giriş parolanızı değil, 1. adımda üretilen parolayı kullandığınızdan emin olun. Parolayı bir daha göremezsiniz; şüphedeyseniz eskisini silip yenisini üretin.</span><span lang="en">The username or application password is wrong. Make sure you're using the password generated in step 1, not your login password. You can't view it again; if in doubt, revoke it and mint a new one.</span></p>
+      </div>
+      <div>
+        <h3>404 <span lang="tr">alıyorum</span><span lang="en">responses</span></h3>
+        <p><span lang="tr">Adres yanlış ya da MCP Adapter etkin değil. Kalıcı bağlantılarınız “Düz” ise <code>?rest_route=</code> biçimini kullanın.</span><span lang="en">The address is wrong or MCP Adapter isn't active. If your permalinks are set to “Plain”, use the <code>?rest_route=</code> form.</span></p>
+      </div>
+      <div>
+        <h3><span lang="tr">Yalnızca 7 WooCommerce aracı görüyorum</span><span lang="en">I only see 7 WooCommerce tools</span></h3>
+        <p><span lang="tr">Yanlış uç noktaya bağlanmışsınız. WooCommerce'in kendi ayrı MCP adresi vardır (<code>/wp-json/woocommerce/mcp</code>) ve orada yalnız kendi birkaç fiili bulunur. Bu sayfadaki adres <code>/wp-json/mcp/mcp-adapter-default-server</code> olmalı.</span><span lang="en">You've connected to the wrong endpoint. WooCommerce publishes its own separate MCP address (<code>/wp-json/woocommerce/mcp</code>) carrying only its own handful of abilities. The address on this page must be <code>/wp-json/mcp/mcp-adapter-default-server</code>.</span></p>
+      </div>
+      <div>
+        <h3><span lang="tr">Uygulama Parolaları bölümü yok</span><span lang="en">No Application Passwords section</span></h3>
+        <p><span lang="tr">Siteniz HTTPS üzerinden çalışmıyor. WordPress bu bölümü yalnız HTTPS'te (ya da yerel geliştirme ortamında) gösterir.</span><span lang="en">Your site isn't on HTTPS. WordPress only shows the section over HTTPS, or in a local development environment.</span></p>
+      </div>
+      <div>
+        <h3><span lang="tr">Hata mesajları anlamsız çıkıyor</span><span lang="en">Error messages come back meaningless</span></h3>
+        <p><span lang="tr">“An error occurred while executing the tool.” gibi genel bir mesaj alıyorsanız, sitenizdeki MCP Adapter sürümü eskidir. Büyük eklentiler (örneğin WooCommerce) kendi içlerinde adapter kopyası taşır ve eski olan kopya kazanabilir. Adapter'ı güncelleyin.</span><span lang="en">A generic “An error occurred while executing the tool.” means an old MCP Adapter version is in play. Large plugins (WooCommerce among them) bundle their own copy of the adapter, and the older copy can win. Update the adapter.</span></p>
+      </div>
+    </div>
+
+    <h2 id="guvenlik"><span lang="tr">Güvenlik</span><span lang="en">Security</span></h2>
+    <ul>
+      <li><span lang="tr"><strong>Araç, sizin yetkilerinizle çalışır.</strong> Yönetici hesabıyla bağlanırsanız araç da yönetici olur. Yalnız içerik düzenlemesi yapacaksa daha dar yetkili bir kullanıcı açın.</span><span lang="en"><strong>The tool acts with your permissions.</strong> Connect as an administrator and the tool is an administrator. If it only needs to edit content, create a narrower user for it.</span></li>
+      <li><span lang="tr"><strong>Her araca ayrı parola verin.</strong> Böylece birini iptal etmek diğerlerini etkilemez. Kullanıcılar → Profil sayfasından tek tek silinebilirler.</span><span lang="en"><strong>Give each tool its own password.</strong> Revoking one then doesn't disturb the others. They can be deleted individually under Users → Profile.</span></li>
+      <li><span lang="tr"><strong>Parolayı yapılandırma dosyasına yazmak zorunda değilsiniz.</strong> VS Code'un <code>inputs</code> özelliği ve Codex'in <code>bearer_token_env_var</code> ayarı parolayı dosyanın dışında tutar. Yapılandırma dosyanızı depoya gönderiyorsanız bunu kullanın.</span><span lang="en"><strong>You don't have to write the password into the config file.</strong> VS Code's <code>inputs</code> feature and Codex's <code>bearer_token_env_var</code> keep it out of the file. Use them if you commit your config.</span></li>
+      <li><span lang="tr"><strong>Yıkıcı işlemler onay ister.</strong> Silme, toplu değiştirme ve finansal işlemler <code>confirm</code> parametresi olmadan çalışmaz; ajan bunu bilerek geçmek zorundadır.</span><span lang="en"><strong>Destructive operations ask first.</strong> Deletes, bulk changes and financial operations refuse to run without a <code>confirm</code> parameter, so an agent has to pass it deliberately.</span></li>
+      <li><span lang="tr"><strong>Sırlar geri dönmez.</strong> Köprüler parola, jeton, API anahtarı ve lisans verisi biçimindeki alanları yanıtlardan temizler.</span><span lang="en"><strong>Secrets don't come back out.</strong> The bridges redact password-, token-, API-key- and licence-shaped fields from responses.</span></li>
+    </ul>
+
+    <hr>
+    <footer>
+      <p>
+        <span lang="tr">Kaynak kod, indirmeler ve sürüm notları: </span>
+        <span lang="en">Source, downloads and release notes: </span>
+        <a href="https://github.com/bucagdas/wp-mcp-bridges">github.com/bucagdas/wp-mcp-bridges</a><br>
+        <span lang="tr">Daha teknik bir özet için </span><span lang="en">For a terser technical summary see </span>
+        <a href="connecting-an-agent.md">connecting-an-agent.md</a>.
+      </p>
+    </footer>
+
+  </div>
+  </main>
+</div>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  /* ---- language ---- */
+  var META = {
+    en: { title: 'WordPress MCP Bridges - Setup Guide', toc: 'Contents' },
+    tr: { title: 'WordPress MCP Bridges - Kurulum Kılavuzu', toc: 'İçindekiler' }
+  };
+  function setLang(lang, push) {
+    if (lang !== 'tr') lang = 'en';
+    root.setAttribute('data-lang', lang);
+    root.setAttribute('lang', lang);
+    document.title = META[lang].title;
+    var toc = document.querySelector('.toc');
+    if (toc) toc.setAttribute('aria-label', META[lang].toc);
+    document.querySelectorAll('[data-setlang]').forEach(function (b) {
+      b.setAttribute('aria-pressed', b.getAttribute('data-setlang') === lang ? 'true' : 'false');
+    });
+    try { localStorage.setItem('wpmcp-lang', lang); } catch (e) {}
+    if (push && history.replaceState) {
+      history.replaceState(null, '', lang === 'tr' ? '#tr' : location.pathname + location.search);
+    }
+  }
+  var initial = 'en';
+  if (location.hash === '#tr') initial = 'tr';
+  else if (location.hash === '#en') initial = 'en';
+  else {
+    try { initial = localStorage.getItem('wpmcp-lang') === 'tr' ? 'tr' : 'en'; } catch (e) {}
+  }
+  setLang(initial, false);
+  document.querySelectorAll('[data-setlang]').forEach(function (b) {
+    b.addEventListener('click', function () { setLang(b.getAttribute('data-setlang'), true); });
+  });
+
+  /* ---- personalise the examples ---- */
+  var siteInput = document.getElementById('f-site');
+  var userInput = document.getElementById('f-user');
+
+  function applyValues() {
+    var site = (siteInput.value || '').trim().replace(/\/+$/, '') || siteInput.placeholder;
+    if (site && !/^https?:\/\//i.test(site)) site = 'https://' + site;
+    var user = (userInput.value || '').trim() || userInput.placeholder;
+    document.querySelectorAll('.js-site').forEach(function (el) { el.textContent = site; });
+    document.querySelectorAll('.js-user').forEach(function (el) { el.textContent = user; });
+    try {
+      localStorage.setItem('wpmcp-site', siteInput.value);
+      localStorage.setItem('wpmcp-user', userInput.value);
+    } catch (e) {}
+  }
+  try {
+    var s = localStorage.getItem('wpmcp-site');
+    var u = localStorage.getItem('wpmcp-user');
+    if (s) siteInput.value = s;
+    if (u) userInput.value = u;
+  } catch (e) {}
+  siteInput.addEventListener('input', applyValues);
+  userInput.addEventListener('input', applyValues);
+  applyValues();
+
+  /* ---- copy buttons ---- */
+  document.querySelectorAll('.copy').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var pre = btn.closest('.block').querySelector('pre');
+      if (!pre) return;
+      var text = pre.innerText;
+      var done = function () {
+        var was = btn.textContent;
+        btn.textContent = root.getAttribute('data-lang') === 'en' ? 'Copied' : 'Kopyalandı';
+        btn.setAttribute('data-done', '1');
+        setTimeout(function () { btn.textContent = was; btn.removeAttribute('data-done'); }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () {});
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.setAttribute('readonly', '');
+        ta.style.position = 'absolute'; ta.style.left = '-9999px';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) {}
+        document.body.removeChild(ta);
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
