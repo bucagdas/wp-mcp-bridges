@@ -26,7 +26,7 @@ class Redirections {
 			'rank-math-mcp/list-redirections',
 			array(
 				'label'               => __( 'List redirections', 'rank-math-mcp-ability' ),
-				'description'         => __( 'Lists Rank Math redirections with sources, target URL, header code, status and hit count. Filter by status or search in the target URL. Requires the redirections module (returns module_inactive otherwise).', 'rank-math-mcp-ability' ),
+				'description'         => __( 'Lists Rank Math redirections with sources, target URL, header code, status and hit count. Filter by status, or search: a search matches either a source pattern or the target URL. Overlaps with the native rank-math/get-redirections ability added in Rank Math 1.0.278, which is read-only and whose "all" status still excludes trashed rows; this verb reaches the trashed status as well, and the bridge adds the create, update, delete and bulk verbs that have no native counterpart. Requires the redirections module (returns module_inactive otherwise).', 'rank-math-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
 					'type'                 => array( 'object', 'null' ),
@@ -240,7 +240,7 @@ class Redirections {
 			'rank-math-mcp/get-redirection-stats',
 			array(
 				'label'               => __( 'Get redirection statistics', 'rank-math-mcp-ability' ),
-				'description'         => __( 'Returns redirection counts by status and the top redirections by hit count. Useful for spotting the most-used redirects or how many are inactive/trashed.', 'rank-math-mcp-ability' ),
+				'description'         => __( 'Returns redirection counts by status and the top redirections by hit count. Useful for spotting the most-used redirects or how many are inactive/trashed. The native rank-math/get-redirections ability also returns counts, but by status and by type only; the hit ranking here has no native counterpart.', 'rank-math-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'output_schema'       => array(
 					'type'        => 'object',
@@ -355,8 +355,14 @@ class Redirections {
 			$params[] = $status;
 		}
 		if ( '' !== $search ) {
-			$where[]  = 'url_to LIKE %s';
-			$params[] = '%' . $wpdb->esc_like( $search ) . '%';
+			// Match Rank Math's own DB layer (Redirections\DB::get_redirections):
+			// a search hits either a source pattern or the target URL. Sources are
+			// stored serialized, so the LIKE runs against the raw column, which is
+			// what the plugin itself does.
+			$like     = '%' . $wpdb->esc_like( $search ) . '%';
+			$where[]  = '( sources LIKE %s OR url_to LIKE %s )';
+			$params[] = $like;
+			$params[] = $like;
 		}
 		$where_sql = $where ? 'WHERE ' . implode( ' AND ', $where ) : '';
 

@@ -122,7 +122,7 @@ class Post_Meta {
 			'rank-math-mcp/update-post-seo',
 			array(
 				'label'               => __( 'Update post SEO metadata', 'rank-math-mcp-ability' ),
-				'description'         => __( 'Updates Rank Math SEO metadata of a post. Provide id (the post/page ID; post_id is also accepted as a deprecated alias) plus only the fields to change: seo_title, seo_description, focus_keyword, canonical_url, breadcrumb_title (empty string clears each), robots (array of index/noindex/nofollow/noarchive/noimageindex/nosnippet; empty array clears), advanced_robots (object, e.g. {"max-snippet":-1}; empty object clears) and/or pillar_content (boolean). Returns {old,new} per changed field, read back after the write.', 'rank-math-mcp-ability' ),
+				'description'         => __( 'Updates Rank Math SEO metadata of a post. Provide id (the post/page ID; post_id is also accepted as a deprecated alias) plus only the fields to change: seo_title, seo_description, focus_keyword, canonical_url, breadcrumb_title (empty string clears each), robots (array of index/noindex/nofollow/noarchive/noimageindex/nosnippet; empty array clears), advanced_robots (object, e.g. {"max-snippet":-1}; empty object clears) and/or pillar_content (boolean). On a WooCommerce product seo_title does double duty: Rank Math feeds the same value to the Product schema "name", and when it is empty the name falls back to the global pt_product_title template (default "%title% %sep% %sitename%"), which is why product schema names often read like SEO titles. Returns {old,new} per changed field, read back after the write.', 'rank-math-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
 					'type'                 => array( 'object', 'null' ),
@@ -214,7 +214,7 @@ class Post_Meta {
 			'rank-math-mcp/update-post-schema',
 			array(
 				'label'               => __( 'Set post schema', 'rank-math-mcp-ability' ),
-				'description'         => __( 'Sets (or replaces) one schema block of the given type on a post, stored as the rank_math_schema_<type> post meta. Provide id (the post ID; post_id is also accepted as a deprecated alias). The schema object is stored as provided; it should follow the structure Rank Math uses (with @type etc.). Use native rank-math/get-post-schema to inspect existing schema and supported types first. Returns {old,new} of the stored value.', 'rank-math-mcp-ability' ),
+				'description'         => __( 'Sets (or replaces) one schema block of the given type on a post, stored as the rank_math_schema_<type> post meta. Provide id (the post ID; post_id is also accepted as a deprecated alias). The schema object is stored as provided; it should follow the structure Rank Math uses (with @type etc.). Use native rank-math/get-post-schema to inspect existing schema and supported types first. Does not apply to the Product schema of a WooCommerce product: Rank Math discards a stored WooCommerceProduct block and regenerates that entity from the product on every render, so the verb returns an error there instead of writing meta the front end never reads. Returns {old,new} of the stored value.', 'rank-math-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
 					'type'                 => 'object',
@@ -237,6 +237,10 @@ class Post_Meta {
 						'schema'  => array(
 							'type'        => 'object',
 							'description' => 'Schema data object to store.',
+						),
+						'force_ignored_type' => array(
+							'type'        => 'boolean',
+							'description' => 'Store the schema even when Rank Math is known to ignore it on the front end (a WooCommerceProduct block on a WooCommerce product). Default false, which returns an error naming the fields that do drive the output.',
 						),
 					),
 					'required'             => array( 'type', 'schema' ),
@@ -657,6 +661,27 @@ class Post_Meta {
 			return new \WP_Error( 'invalid_type', __( 'Invalid schema type.', 'rank-math-mcp-ability' ) );
 		}
 		$meta_key = 'rank_math_schema_' . $type;
+
+		// Rank Math rebuilds the Product entity of a WooCommerce product on every
+		// render: Schema\Frontend::add_schema() drops any stored schema whose
+		// @type is WooCommerceProduct, and Product_WooCommerce::set_product()
+		// reconstructs the entity from the product object without reading this
+		// meta. Storing it here would therefore succeed and change nothing that
+		// is ever emitted, so refuse by default and point at the fields that do
+		// drive the output. The stored value still feeds wp-admin's Schema
+		// editor, which is what force_ignored_type is for.
+		$requested_type = isset( $input['schema']['@type'] ) ? (string) $input['schema']['@type'] : $type;
+		if (
+			empty( $input['force_ignored_type'] )
+			&& function_exists( 'wc_get_product' )
+			&& 'product' === get_post_type( $post_id )
+			&& 0 === strcasecmp( 'WooCommerceProduct', $requested_type )
+		) {
+			return new \WP_Error(
+				'schema_ignored_by_target',
+				__( 'Rank Math ignores a stored WooCommerceProduct schema on the front end and rebuilds the Product entity from the WooCommerce product on every render, so this write would report success without changing the output. The schema "name" follows the Rank Math SEO title: set it per product with rank-math-mcp/update-post-seo (seo_title), or change the global template with rank-math-mcp/update-settings (pt_product_title). Price, SKU, availability, images and ratings come from the product itself and the store tax settings. Pass force_ignored_type: true to store the meta anyway, for example to populate the Schema editor in wp-admin.', 'rank-math-mcp-ability' )
+			);
+		}
 
 		$old = self::meta_or_null( $post_id, $meta_key );
 		// update_post_meta() expects SLASHED data — see cb_update_post_seo()'s
