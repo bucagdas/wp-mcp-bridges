@@ -621,17 +621,29 @@ class GB {
 		$per_page = isset( $input['per_page'] ) ? (int) $input['per_page'] : 20;
 		$page     = isset( $input['page'] ) ? (int) $input['page'] : 1;
 
-		$query = new \WP_Query(
-			array(
-				'post_type'      => 'any',
-				'post_status'    => array( 'publish', 'draft', 'pending', 'private' ),
-				'posts_per_page' => min( 100, max( 1, $per_page ) ),
-				'paged'          => max( 1, $page ),
-				'orderby'        => 'date',
-				'order'          => 'DESC',
-				's'              => 'wp:generateblocks/',
-			)
+		$args = array(
+			'post_type'      => 'any',
+			'post_status'    => array( 'publish', 'draft', 'pending', 'private' ),
+			'posts_per_page' => min( 100, max( 1, $per_page ) ),
+			'paged'          => max( 1, $page ),
+			'orderby'        => 'date',
+			'order'          => 'DESC',
+			's'              => 'wp:generateblocks/',
 		);
+		// Only posts the caller may edit. The verb asks for edit_posts, which
+		// authors and contributors hold, and without a limit the listing gave
+		// them every user's draft and private titles, which core's own
+		// permission checks keep from them. Measured before this change.
+		//
+		// Not WP_Query's 'perm' => 'editable': combined with post_type 'any'
+		// it also hid other users' drafts from administrators, and with
+		// post_status 'any' it did not limit authors at all. Both measured.
+		// An author clause in SQL keeps the totals and paging right and does
+		// not leak how many posts were left out.
+		if ( ! current_user_can( 'edit_others_posts' ) || ! current_user_can( 'edit_others_pages' ) ) {
+			$args['author'] = get_current_user_id();
+		}
+		$query = new \WP_Query( $args );
 
 		$posts = array();
 		foreach ( $query->posts as $post ) {
