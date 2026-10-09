@@ -62,7 +62,7 @@ class Customers {
 					'description' => 'Object with "total" and "customers" (array of summary objects).',
 				),
 				'execute_callback'    => array( __CLASS__, 'cb_list' ),
-				'permission_callback' => array( Plugin::class, 'permission' ),
+				'permission_callback' => array( __CLASS__, 'permission_list' ),
 				'meta'                => Plugin::meta( true, false, true ),
 			)
 		);
@@ -90,7 +90,7 @@ class Customers {
 					'description' => 'Full customer detail.',
 				),
 				'execute_callback'    => array( __CLASS__, 'cb_get' ),
-				'permission_callback' => array( Plugin::class, 'permission' ),
+				'permission_callback' => array( __CLASS__, 'permission_read' ),
 				'meta'                => Plugin::meta( true, false, true ),
 			)
 		);
@@ -129,7 +129,7 @@ class Customers {
 					'description' => 'The created customer (password never included).',
 				),
 				'execute_callback'    => array( __CLASS__, 'cb_create' ),
-				'permission_callback' => array( Plugin::class, 'permission' ),
+				'permission_callback' => array( __CLASS__, 'permission_create' ),
 				'meta'                => Plugin::meta( false, false, false ),
 			)
 		);
@@ -162,7 +162,7 @@ class Customers {
 					'description' => 'Object with "id" and "updated": per-field {old, new} (billing/shipping compared as whole objects).',
 				),
 				'execute_callback'    => array( __CLASS__, 'cb_update' ),
-				'permission_callback' => array( Plugin::class, 'permission' ),
+				'permission_callback' => array( __CLASS__, 'permission_edit' ),
 				'meta'                => Plugin::meta( false, false, true ),
 			)
 		);
@@ -198,7 +198,7 @@ class Customers {
 					'description' => 'Object with "id", "old" (the deleted customer summary) and "new" (null).',
 				),
 				'execute_callback'    => array( __CLASS__, 'cb_delete' ),
-				'permission_callback' => array( Plugin::class, 'permission' ),
+				'permission_callback' => array( __CLASS__, 'permission_delete' ),
 				'meta'                => Plugin::meta( false, true, true ),
 			)
 		);
@@ -383,6 +383,79 @@ class Customers {
 	// ---------------------------------------------------------------------
 	// Helpers
 	// ---------------------------------------------------------------------
+
+	/*
+	 * Customer permissions: manage_woocommerce AND WooCommerce's own
+	 * wc_rest_check_user_permissions(), the check its REST customers
+	 * controller makes.
+	 *
+	 * manage_woocommerce alone was not enough. Shop managers hold it, and
+	 * WooCommerce's rule about which accounts they may touch is enforced on
+	 * the edit_user / delete_user meta capabilities (wc_modify_map_meta_cap)
+	 * and in wc_rest_check_user_permissions(), neither of which a check for
+	 * manage_woocommerce reaches. Measured before this change: acting as a
+	 * shop manager, update-customer changed an administrator's email address
+	 * and delete-customer removed a user holding an extra non-customer role.
+	 *
+	 * Keeping manage_woocommerce as well means a role that has edit_users but
+	 * no store access does not gain these verbs.
+	 */
+	public static function permission_list( $input = null ) {
+		return Plugin::permission() && wc_rest_check_user_permissions( 'read' );
+	}
+
+	public static function permission_create( $input = null ) {
+		return Plugin::permission() && wc_rest_check_user_permissions( 'create' );
+	}
+
+	public static function permission_read( $input = null ) {
+		return self::object_permission( $input, 'read' );
+	}
+
+	public static function permission_edit( $input = null ) {
+		return self::object_permission( $input, 'edit' );
+	}
+
+	public static function permission_delete( $input = null ) {
+		return self::object_permission( $input, 'delete' );
+	}
+
+	/**
+	 * Object-level check for one customer. The adapter's execute-ability runs
+	 * permission callbacks on the raw parameters before they are validated,
+	 * so a missing or non-existent id is answered here with a specific error
+	 * instead of falling through to a generic "permission denied".
+	 *
+	 * @param mixed  $input   Raw ability input.
+	 * @param string $context read, edit or delete, as wc_rest_check_user_permissions() expects.
+	 * @return true|\WP_Error|false
+	 */
+	private static function object_permission( $input, string $context ) {
+		if ( ! Plugin::permission() ) {
+			return false;
+		}
+
+		$id = is_array( $input ) && isset( $input['id'] ) ? (int) $input['id'] : 0;
+		if ( $id <= 0 ) {
+			return new \WP_Error( 'missing_id', __( 'Provide "id", the user ID of the customer.', 'wc-mcp-ability' ) );
+		}
+		if ( ! get_userdata( $id ) ) {
+			return new \WP_Error( 'customer_not_found', __( 'No user exists with the given ID.', 'wc-mcp-ability' ) );
+		}
+
+		if ( ! wc_rest_check_user_permissions( $context, $id ) ) {
+			return new \WP_Error(
+				'customer_forbidden',
+				sprintf(
+					/* translators: %s: read, edit or delete */
+					__( 'WooCommerce does not let the current user %s this account. Shop managers may only edit users whose roles are all listed in woocommerce_shop_manager_editable_roles (by default just "customer"), WooCommerce does not give them delete_users by default, and only an administrator may act on another administrator.', 'wc-mcp-ability' ),
+					$context
+				)
+			);
+		}
+
+		return true;
+	}
 
 	private static function apply_address( \WC_Customer $customer, string $type, array $fields ): void {
 		$allowed = self::ADDRESS_FIELDS;

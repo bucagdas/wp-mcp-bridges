@@ -267,9 +267,18 @@ class Orders {
 			return new \WP_Error( 'missing_line_items', __( 'At least one line item is required.', 'wc-mcp-ability' ) );
 		}
 
+		// Created as pending and moved to the requested status only once the
+		// items are in, the order WooCommerce's own REST controller follows.
+		// Passing the status to wc_create_order() saved the order in that
+		// status while it was still empty, so the status transition that
+		// reduces stock (woocommerce_order_status_processing and friends ->
+		// wc_maybe_reduce_stock_levels) ran with nothing to reduce and never
+		// ran again. Measured before this change: two units ordered as
+		// "processing" through /wc/v3/orders took stock down by 2, through
+		// this verb by 0.
 		$order = wc_create_order(
 			array(
-				'status'        => isset( $input['status'] ) ? (string) $input['status'] : 'pending',
+				'status'        => 'pending',
 				'customer_id'   => isset( $input['customer_id'] ) ? (int) $input['customer_id'] : 0,
 				'customer_note' => isset( $input['customer_note'] ) ? (string) $input['customer_note'] : null,
 				'created_via'   => 'wc-mcp',
@@ -279,59 +288,81 @@ class Orders {
 			return $order;
 		}
 
-		foreach ( $input['line_items'] as $i => $line ) {
-			if ( empty( $line['product_id'] ) ) {
-				$order->delete( true );
-				return new \WP_Error( 'invalid_line_item', sprintf( __( 'line_items[%d] is missing product_id.', 'wc-mcp-ability' ), $i ) );
-			}
-
-			$product_id = (int) $line['product_id'];
-			$product    = wc_get_product( $product_id );
-			if ( ! $product ) {
-				$order->delete( true );
-				return new \WP_Error( 'product_not_found', sprintf( __( 'No product exists with id %1$d (line_items[%2$d]).', 'wc-mcp-ability' ), $product_id, $i ) );
-			}
-
-			if ( ! empty( $line['variation_id'] ) ) {
-				$variation_id = (int) $line['variation_id'];
-				$variation    = wc_get_product( $variation_id );
-				if ( ! $variation || $variation->get_parent_id() !== $product_id ) {
+		// The order already exists at this point (wc_create_order() saved it),
+		// and several of the steps below can throw: WC_Order's setters raise
+		// WC_Data_Exception on an invalid billing email, for one. Without this,
+		// the call failed but left a pending order behind, and an agent that
+		// retried left one more each time. Measured before this change.
+		//
+		// The guard stops at the final save on purpose. Once the order has been
+		// saved and payment_complete() has run, an exception from a third-party
+		// hook must not delete what is by then a real, paid order.
+		try {
+			foreach ( $input['line_items'] as $i => $line ) {
+				if ( empty( $line['product_id'] ) ) {
 					$order->delete( true );
-					return new \WP_Error( 'invalid_variation', sprintf( __( 'variation_id %1$d does not belong to product %2$d (line_items[%3$d]).', 'wc-mcp-ability' ), $variation_id, $product_id, $i ) );
+					return new \WP_Error( 'invalid_line_item', sprintf( __( 'line_items[%d] is missing product_id.', 'wc-mcp-ability' ), $i ) );
 				}
-				$product = $variation;
-			} elseif ( $product->is_type( 'variable' ) ) {
-				$order->delete( true );
-				return new \WP_Error( 'missing_variation', sprintf( __( 'product_id %1$d is a variable product; variation_id is required (line_items[%2$d]).', 'wc-mcp-ability' ), $product_id, $i ) );
+
+				$product_id = (int) $line['product_id'];
+				$product    = wc_get_product( $product_id );
+				if ( ! $product ) {
+					$order->delete( true );
+					return new \WP_Error( 'product_not_found', sprintf( __( 'No product exists with id %1$d (line_items[%2$d]).', 'wc-mcp-ability' ), $product_id, $i ) );
+				}
+
+				if ( ! empty( $line['variation_id'] ) ) {
+					$variation_id = (int) $line['variation_id'];
+					$variation    = wc_get_product( $variation_id );
+					if ( ! $variation || $variation->get_parent_id() !== $product_id ) {
+						$order->delete( true );
+						return new \WP_Error( 'invalid_variation', sprintf( __( 'variation_id %1$d does not belong to product %2$d (line_items[%3$d]).', 'wc-mcp-ability' ), $variation_id, $product_id, $i ) );
+					}
+					$product = $variation;
+				} elseif ( $product->is_type( 'variable' ) ) {
+					$order->delete( true );
+					return new \WP_Error( 'missing_variation', sprintf( __( 'product_id %1$d is a variable product; variation_id is required (line_items[%2$d]).', 'wc-mcp-ability' ), $product_id, $i ) );
+				}
+
+				$qty    = isset( $line['quantity'] ) ? max( 1, (int) $line['quantity'] ) : 1;
+				$result = $order->add_product( $product, $qty );
+				if ( ! $result ) {
+					$order->delete( true );
+					return new \WP_Error( 'add_product_failed', sprintf( __( 'Could not add product %1$d to the order (line_items[%2$d]).', 'wc-mcp-ability' ), $product->get_id(), $i ) );
+				}
 			}
 
-			$qty    = isset( $line['quantity'] ) ? max( 1, (int) $line['quantity'] ) : 1;
-			$result = $order->add_product( $product, $qty );
-			if ( ! $result ) {
-				$order->delete( true );
-				return new \WP_Error( 'add_product_failed', sprintf( __( 'Could not add product %1$d to the order (line_items[%2$d]).', 'wc-mcp-ability' ), $product->get_id(), $i ) );
+			if ( isset( $input['billing'] ) ) {
+				$order->set_address( (array) $input['billing'], 'billing' );
 			}
-		}
+			if ( isset( $input['shipping'] ) ) {
+				$order->set_address( (array) $input['shipping'], 'shipping' );
+			}
+			if ( ! empty( $input['payment_method'] ) ) {
+				$order->set_payment_method( (string) $input['payment_method'] );
+			}
+			if ( ! empty( $input['payment_method_title'] ) ) {
+				$order->set_payment_method_title( (string) $input['payment_method_title'] );
+			}
 
-		if ( isset( $input['billing'] ) ) {
-			$order->set_address( (array) $input['billing'], 'billing' );
-		}
-		if ( isset( $input['shipping'] ) ) {
-			$order->set_address( (array) $input['shipping'], 'shipping' );
-		}
-		if ( ! empty( $input['payment_method'] ) ) {
-			$order->set_payment_method( (string) $input['payment_method'] );
-		}
-		if ( ! empty( $input['payment_method_title'] ) ) {
-			$order->set_payment_method_title( (string) $input['payment_method_title'] );
-		}
+			$order->calculate_totals();
 
-		$order->calculate_totals();
+			// Same sequence as WC_REST_Orders_V2_Controller::save_object():
+			// status, save, then payment_complete() for a new order.
+			if ( ! empty( $input['status'] ) ) {
+				$order->set_status( (string) $input['status'] );
+			}
+		} catch ( \Exception $e ) {
+			$order->delete( true );
+			return new \WP_Error(
+				$e instanceof \WC_Data_Exception ? $e->getErrorCode() : 'order_create_failed',
+				$e->getMessage()
+			);
+		}
+		$order->save();
 
 		if ( ! empty( $input['set_paid'] ) ) {
 			$order->payment_complete();
-		} else {
-			$order->save();
 		}
 
 		return self::format_order( wc_get_order( $order->get_id() ) );

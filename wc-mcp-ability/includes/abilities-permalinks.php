@@ -122,7 +122,7 @@ class Permalinks {
 					'description' => 'Object with "old" and "new" (both the full permalink settings) and "example_product_url".',
 				),
 				'execute_callback'    => array( __CLASS__, 'cb_update' ),
-				'permission_callback' => array( Plugin::class, 'permission' ),
+				'permission_callback' => array( __CLASS__, 'permission_update' ),
 				'meta'                => Plugin::meta( false, true, true ),
 			)
 		);
@@ -131,6 +131,33 @@ class Permalinks {
 	// ---------------------------------------------------------------------
 	// Callbacks
 	// ---------------------------------------------------------------------
+
+	/**
+	 * Writing the permalink bases needs manage_options as well as
+	 * manage_woocommerce. WooCommerce saves them from core's
+	 * Settings > Permalinks screen (WC_Admin_Permalink_Settings::settings_save()
+	 * only runs there), and that screen is gated on manage_options. Shop
+	 * managers hold manage_woocommerce but not manage_options, so asking only
+	 * for the former let them rewrite every product, category and tag URL on
+	 * the store, which WooCommerce's own UI does not allow. Measured before
+	 * this change. Reading the settings is harmless and stays on
+	 * manage_woocommerce.
+	 *
+	 * @param mixed $input Raw ability input.
+	 * @return bool|\WP_Error
+	 */
+	public static function permission_update( $input = null ) {
+		if ( ! Plugin::permission() ) {
+			return false;
+		}
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return new \WP_Error(
+				'permalinks_forbidden',
+				__( 'Changing the store permalink bases needs manage_options, the capability that guards Settings > Permalinks, where WooCommerce itself saves them. Shop managers do not have it.', 'wc-mcp-ability' )
+			);
+		}
+		return true;
+	}
 
 	public static function cb_get() {
 		return self::describe( self::report() );
