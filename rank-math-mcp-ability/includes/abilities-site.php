@@ -123,7 +123,7 @@ class Site {
 			'rank-math-mcp/get-sitemap-status',
 			array(
 				'label'               => __( 'Get sitemap cache status', 'rank-math-mcp-ability' ),
-				'description'         => __( 'Returns the Rank Math XML sitemap cache status: whether the sitemap module is active, the cache directory path, and the list of cached sitemap files with their type. Requires the sitemap module.', 'rank-math-mcp-ability' ),
+				'description'         => __( 'Returns the Rank Math XML sitemap cache status: whether the sitemap module is active, the cache directory path, and the list of cached sitemap files with their type. Not the same thing as the native rank-math/get-sitemap-status ability despite the shared name: that one describes the sitemap itself (whether it is enabled, the index URL, and each sitemap type with its URL and estimated entry count), while this one reports what is cached on disk, which is what clear-sitemap-cache acts on. Requires the sitemap module.', 'rank-math-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'output_schema'       => array(
 					'type'        => 'object',

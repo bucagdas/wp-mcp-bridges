@@ -19,7 +19,7 @@ class Monitor {
 			'rank-math-mcp/list-404-logs',
 			array(
 				'label'               => __( 'List 404 logs', 'rank-math-mcp-ability' ),
-				'description'         => __( 'Lists Rank Math 404 monitor entries: URI, hit count, last access time, referer and user agent. Searchable by URI substring. Requires the 404-monitor module (returns module_inactive otherwise).', 'rank-math-mcp-ability' ),
+				'description'         => __( 'Lists Rank Math 404 monitor entries: URI, hit count, last access time, referer and user agent. Searchable by URI substring. Overlaps with the native rank-math/get-404-logs ability added in Rank Math 1.0.280, which can order by hits or last access and returns summary stats but has no search; this verb finds entries by URI, and the bridge adds delete-404-log and clear-404-logs, which have no native counterpart. Requires the 404-monitor module (returns module_inactive otherwise).', 'rank-math-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
 					'type'                 => array( 'object', 'null' ),
