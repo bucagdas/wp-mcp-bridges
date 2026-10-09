@@ -22,7 +22,7 @@ class Posts {
 			'wp-core-mcp/list-posts',
 			array(
 				'label'               => __( 'List posts', 'wp-core-mcp-ability' ),
-				'description'         => __( 'Lists posts of any public post type (post, page, attachment, or any custom post type registered public or show_in_rest). Filter by status and search term.', 'wp-core-mcp-ability' ),
+				'description'         => __( 'Lists posts of any public post type (post, page, attachment, or any custom post type registered public or show_in_rest). Filter by status and search term. A caller without the post type\'s edit_others_posts capability (an author or contributor, for example) gets only their own posts for any status other than publish, including any; use status publish to list everyone\'s published posts.', 'wp-core-mcp-ability' ),
 				'category'            => Plugin::CATEGORY,
 				'input_schema'        => array(
 					'type'                 => array( 'object', 'null' ),
@@ -615,6 +615,20 @@ class Posts {
 		);
 		if ( ! empty( $input['search'] ) ) {
 			$args['s'] = (string) $input['search'];
+		}
+
+		// The verb asks for the post type's edit_posts, which authors and
+		// contributors hold, and the status comes from the caller. Without a
+		// limit, status=draft / private / any gave them every user's
+		// unpublished titles, which core keeps from them (read_post is false,
+		// /wp/v2/posts leaves them out). Measured before this change.
+		// Without edit_others_posts, any status other than publish lists only
+		// the caller's own posts. Published posts stay visible to everyone
+		// through status=publish. The limit is an SQL author clause, so the
+		// totals and paging stay right and nothing hints at what was left out.
+		$type_obj = get_post_type_object( $post_type );
+		if ( 'publish' !== $args['post_status'] && ! current_user_can( $type_obj->cap->edit_others_posts ) ) {
+			$args['author'] = get_current_user_id();
 		}
 
 		$query = new \WP_Query( $args );

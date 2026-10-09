@@ -323,7 +323,13 @@ class Comments {
 		$old   = wp_get_comment_status( $comment );
 		$force = ! empty( $input['force'] );
 
-		$result = wp_delete_comment( $id, ! $force );
+		// wp_delete_comment()'s second argument is $force_delete: true deletes
+		// for good, false moves to the trash. This used to pass ! $force, which
+		// turned the default call (documented and reported as "move to trash")
+		// into a permanent delete, and force: true into a trash. Measured
+		// before this change: the default call removed the row from
+		// wp_comments while answering new = "trash".
+		$result = wp_delete_comment( $id, $force );
 		if ( ! $result ) {
 			return new \WP_Error( 'delete_failed', __( 'The comment could not be deleted.', 'wp-core-mcp-ability' ) );
 		}
