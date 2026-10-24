@@ -3,7 +3,7 @@
  * Plugin Name: Rank Math MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/rank-math-mcp-ability
  * Description: Full-coverage Rank Math SEO abilities for MCP. Per-post SEO metadata (core, robots, social, schema), settings, redirections, 404 monitor, sitemap tools, module toggling and analytics status.
- * Version: 2.2.1
+ * Version: 2.2.2
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -30,6 +30,25 @@ require_once __DIR__ . '/includes/plugin-update-checker/plugin-update-checker.ph
 	'https://raw.githubusercontent.com/bucagdas/wp-mcp-bridges/main/rank-math-mcp-ability/update.json',
 	__FILE__,
 	'rank-math-mcp-ability'
+);
+
+// A "Buy me a coffee" link beside Version / By / View details on the Plugins
+// screen. Admin-only, and deliberately not part of any ability output: agents
+// read that text, people read this.
+add_filter(
+	'plugin_row_meta',
+	static function ( $links, $file ) {
+		if ( plugin_basename( __FILE__ ) === $file ) {
+			$links[] = sprintf(
+				'<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
+				esc_url( 'https://buymeacoffee.com/bucagdas' ),
+				esc_html__( 'Buy me a coffee', 'rank-math-mcp-ability' )
+			);
+		}
+		return $links;
+	},
+	10,
+	2
 );
 
 class Plugin {
