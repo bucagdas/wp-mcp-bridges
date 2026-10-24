@@ -154,6 +154,10 @@ later by deleting its application password.
 - The target plugin/theme each bridge is built for.
 - The WordPress MCP Adapter plugin (see above), to expose abilities as MCP tools. Abilities also work over the core Abilities REST API without it.
 
+## Support
+
+If these bridges save you time, you can [buy me a coffee](https://buymeacoffee.com/bucagdas). It goes toward keeping them current: each release is re-tested against new versions of WordPress, the MCP Adapter and the plugins they cover.
+
 ## Contributing
 
 This repository is a **mirror** — it's generated from a private source repository, not developed here directly. Pull requests are welcome and will be read, but changes land by being applied upstream and then re-published here, not by merging directly into this repo. If you'd like to report a bug or request a bridge for another plugin/theme, please open an issue.
