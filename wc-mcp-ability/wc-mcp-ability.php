@@ -3,7 +3,7 @@
  * Plugin Name: WooCommerce MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/wc-mcp-ability
  * Description: WooCommerce abilities for MCP. Product/taxonomy/customer/coupon CRUD plus a generic wc/v3 REST request for the rest of the store.
- * Version: 2.11.0
+ * Version: 2.11.1
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -35,6 +35,25 @@ require_once __DIR__ . '/includes/plugin-update-checker/plugin-update-checker.ph
 	'https://raw.githubusercontent.com/bucagdas/wp-mcp-bridges/main/wc-mcp-ability/update.json',
 	__FILE__,
 	'wc-mcp-ability'
+);
+
+// A "Buy me a coffee" link beside Version / By / View details on the Plugins
+// screen. Admin-only, and deliberately not part of any ability output: agents
+// read that text, people read this.
+add_filter(
+	'plugin_row_meta',
+	static function ( $links, $file ) {
+		if ( plugin_basename( __FILE__ ) === $file ) {
+			$links[] = sprintf(
+				'<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
+				esc_url( 'https://buymeacoffee.com/bucagdas' ),
+				esc_html__( 'Buy me a coffee', 'wc-mcp-ability' )
+			);
+		}
+		return $links;
+	},
+	10,
+	2
 );
 
 class Plugin {
