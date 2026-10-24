@@ -1,6 +1,6 @@
 # wp-mcp-bridges
 
-![License](https://img.shields.io/badge/license-GPL--2.0--or--later-3da638)
+![License](https://img.shields.io/badge/license-GPL--2.0--or--later-3da638) [![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-ffdd00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/bucagdas)
 
 WordPress 6.9 shipped the [Abilities API](https://developer.wordpress.org/apis/abilities-api/) into core, and the [WordPress MCP Adapter](https://github.com/WordPress/mcp-adapter) plugin turns any site's registered abilities into MCP tools an AI agent can call. But most WordPress plugins and themes don't register any abilities of their own — the API exists, the adapter exists, and there's nothing to expose.
 
