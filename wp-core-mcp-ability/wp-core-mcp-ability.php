@@ -3,7 +3,7 @@
  * Plugin Name: WP Core MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/wp-core-mcp-ability
  * Description: Full-coverage WordPress core abilities for MCP. Exposes WordPress's own native core/* abilities to MCP, plus generic options, posts, taxonomies/terms, comments and users CRUD.
- * Version: 1.3.9
+ * Version: 1.3.10
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -34,6 +34,25 @@ require_once __DIR__ . '/includes/plugin-update-checker/plugin-update-checker.ph
 	'https://raw.githubusercontent.com/bucagdas/wp-mcp-bridges/main/wp-core-mcp-ability/update.json',
 	__FILE__,
 	'wp-core-mcp-ability'
+);
+
+// A "Buy me a coffee" link beside Version / By / View details on the Plugins
+// screen. Admin-only, and deliberately not part of any ability output: agents
+// read that text, people read this.
+add_filter(
+	'plugin_row_meta',
+	static function ( $links, $file ) {
+		if ( plugin_basename( __FILE__ ) === $file ) {
+			$links[] = sprintf(
+				'<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
+				esc_url( 'https://buymeacoffee.com/bucagdas' ),
+				esc_html__( 'Buy me a coffee', 'wp-core-mcp-ability' )
+			);
+		}
+		return $links;
+	},
+	10,
+	2
 );
 
 class Plugin {
