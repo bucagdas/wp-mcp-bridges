@@ -3,7 +3,7 @@
  * Plugin Name: GeneratePress MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/generatepress-mcp-ability
  * Description: GeneratePress ecosystem abilities for MCP. Theme settings, GP Premium module status, GP Elements (full CRUD), GenerateBlocks settings, global styles (full CRUD) and Pro pattern libraries. Components are detected at runtime; abilities of missing components are simply not registered.
- * Version: 1.4.2
+ * Version: 1.4.3
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -29,6 +29,25 @@ require_once __DIR__ . '/includes/plugin-update-checker/plugin-update-checker.ph
 	'https://raw.githubusercontent.com/bucagdas/wp-mcp-bridges/main/generatepress-mcp-ability/update.json',
 	__FILE__,
 	'generatepress-mcp-ability'
+);
+
+// A "Buy me a coffee" link beside Version / By / View details on the Plugins
+// screen. Admin-only, and deliberately not part of any ability output: agents
+// read that text, people read this.
+add_filter(
+	'plugin_row_meta',
+	static function ( $links, $file ) {
+		if ( plugin_basename( __FILE__ ) === $file ) {
+			$links[] = sprintf(
+				'<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
+				esc_url( 'https://buymeacoffee.com/bucagdas' ),
+				esc_html__( 'Buy me a coffee', 'generatepress-mcp-ability' )
+			);
+		}
+		return $links;
+	},
+	10,
+	2
 );
 
 class Plugin {
@@ -464,6 +483,19 @@ class Plugin {
 
 	public static function has_gb(): bool {
 		return defined( 'GENERATEBLOCKS_VERSION' );
+	}
+
+	/**
+	 * GenerateBlocks 2.5.0 stopped caching page CSS in files: every request
+	 * prints it inline (GenerateBlocks_Inline_CSS), the print-method setting,
+	 * the regeneration endpoint and generateblocks_dynamic_css_time are gone,
+	 * and generateblocks_dynamic_css_posts is no longer read. Measured on
+	 * 2.5.0: a block's CSS changed by a bridge write was on the page at the
+	 * next request with nothing flushed. Earlier versions still have the file
+	 * cache, so everything that touches it stays version-aware.
+	 */
+	public static function gb_css_is_inline(): bool {
+		return self::has_gb() && version_compare( GENERATEBLOCKS_VERSION, '2.5.0', '>=' );
 	}
 
 	public static function has_gb_pro(): bool {
@@ -1282,7 +1314,10 @@ class Plugin {
 			),
 			'css_cache'          => array(
 				'theme_dynamic_css_version' => (string) get_option( 'generate_dynamic_css_cached_version', '' ),
-				'gb_dynamic_css_time'       => (int) get_option( 'generateblocks_dynamic_css_time', 0 ),
+				// From GenerateBlocks 2.5.0 the option below is never written
+				// again, so whatever it holds is a leftover, not a time.
+				'gb_dynamic_css_time'       => self::gb_css_is_inline() ? null : (int) get_option( 'generateblocks_dynamic_css_time', 0 ),
+				'gb_page_css'               => self::gb_css_is_inline() ? 'inline' : 'file-cache',
 			),
 		);
 	}

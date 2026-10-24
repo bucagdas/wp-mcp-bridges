@@ -397,11 +397,11 @@ class GB {
 				'generatepress-mcp/regenerate-gb-css',
 				array(
 					'label'               => __( 'Regenerate GenerateBlocks CSS', 'generatepress-mcp-ability' ),
-					'description'         => __( 'Clears the GenerateBlocks per-post CSS file cache (generateblocks_dynamic_css_posts) so CSS files are regenerated on the next visit — the same operation as the "Regenerate CSS files" tool in the GenerateBlocks dashboard. Safe and idempotent.', 'generatepress-mcp-ability' ),
+					'description'         => __( 'On GenerateBlocks before 2.5.0: clears the per-post CSS file cache (generateblocks_dynamic_css_posts) so CSS files are regenerated on the next visit, the same operation as the "Regenerate CSS files" tool in the GenerateBlocks dashboard. From GenerateBlocks 2.5.0 page CSS is printed inline on every request, so there is nothing to regenerate: the verb changes nothing and answers not_applicable with the reason. Safe and idempotent.', 'generatepress-mcp-ability' ),
 					'category'            => Plugin::CATEGORY,
 					'output_schema'       => array(
 						'type'        => 'object',
-						'description' => 'Object with "old" (number of cached posts before) and "new" (0 after clearing).',
+						'description' => 'Before GenerateBlocks 2.5.0: object with "old" (number of cached posts before) and "new" (0 after clearing). From 2.5.0: object with "not_applicable": true and "reason".',
 					),
 					'execute_callback'    => array( __CLASS__, 'cb_regenerate_gb_css' ),
 					'permission_callback' => array( Plugin::class, 'permission_manage_options' ),
@@ -560,7 +560,11 @@ class GB {
 				'generateblocks'     => Plugin::has_gb() ? GENERATEBLOCKS_VERSION : null,
 				'generateblocks_pro' => Plugin::has_gb_pro() ? GENERATEBLOCKS_PRO_VERSION : null,
 			),
-			'css_cache' => array(
+			'css_cache' => Plugin::gb_css_is_inline() ? array(
+				'mode' => 'inline',
+				'note' => 'GenerateBlocks 2.5.0+ prints page CSS inline on every request; there is no per-post CSS cache.',
+			) : array(
+				'mode'             => 'file-cache',
 				'last_regenerated' => (int) get_option( 'generateblocks_dynamic_css_time', 0 ),
 				'cached_posts'     => is_array( $css_posts ) ? count( $css_posts ) : 0,
 			),
@@ -602,6 +606,15 @@ class GB {
 	}
 
 	public static function cb_regenerate_gb_css() {
+		// Nothing to regenerate from GenerateBlocks 2.5.0 on, and answering
+		// {old: 0, new: 0} would read as if something had been done.
+		if ( Plugin::gb_css_is_inline() ) {
+			return array(
+				'not_applicable' => true,
+				'reason'         => 'GenerateBlocks ' . GENERATEBLOCKS_VERSION . ' prints page CSS inline on every request, so there is no CSS file cache to regenerate. Changes to block CSS show on the next page load.',
+			);
+		}
+
 		$old = get_option( 'generateblocks_dynamic_css_posts', array() );
 
 		// Same full-wipe lever the element/settings verbs now call
