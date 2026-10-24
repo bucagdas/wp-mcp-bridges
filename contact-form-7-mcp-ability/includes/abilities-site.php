@@ -238,12 +238,33 @@ class Site {
 
 		$values = isset( $input['values'] ) && is_array( $input['values'] ) ? $input['values'] : array();
 
+		// Contact Form 7 builds one WPCF7_Submission per request; a second
+		// submit() in the same request gets null from get_instance() and
+		// fails inside CF7 with "Call to a member function get_result() on
+		// null". Over MCP each call is its own request, but say what is
+		// wrong instead of letting that surface.
+		if ( class_exists( '\WPCF7_Submission' ) && null !== \WPCF7_Submission::get_instance() ) {
+			return new \WP_Error(
+				'submission_already_run',
+				__( 'Contact Form 7 runs one submission per request and one has already run in this request. Call submit-test again in a separate request.', 'contact-form-7-mcp-ability' )
+			);
+		}
+
 		$original_post = $_POST; // phpcs:ignore WordPress.Security.NonceVerification.Missing
 
+		// Fill $_POST the way WordPress hands it to Contact Form 7 in a real
+		// submission: raw values, slashed (wp_magic_quotes), with CF7 doing its
+		// own unslashing and per-field sanitising. The previous
+		// sanitize_text_field() on unslashed values meant CF7's wp_unslash()
+		// stripped backslashes ("C:\dir" arrived as "C:dir") and every textarea
+		// lost its line breaks, so the test did not see what a visitor would
+		// send. Both measured. Multi-value fields (checkboxes) keep their
+		// array shape.
 		$_POST = array(); // phpcs:ignore WordPress.Security.NonceVerification.Missing
 		foreach ( $values as $key => $value ) {
 			if ( is_string( $key ) && ! str_starts_with( $key, '_' ) ) {
-				$_POST[ $key ] = sanitize_text_field( (string) $value ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+				$raw = is_array( $value ) ? array_map( 'strval', array_values( $value ) ) : (string) $value;
+				$_POST[ $key ] = wp_slash( $raw ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
 			}
 		}
 		$_POST['_wpcf7'] = $form->id(); // phpcs:ignore WordPress.Security.NonceVerification.Missing

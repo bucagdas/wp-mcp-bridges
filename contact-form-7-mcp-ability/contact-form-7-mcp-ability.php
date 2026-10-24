@@ -3,7 +3,7 @@
  * Plugin Name: Contact Form 7 MCP Ability
  * Plugin URI: https://github.com/bucagdas/wp-mcp-bridges/tree/main/contact-form-7-mcp-ability
  * Description: Full-coverage Contact Form 7 abilities for MCP. Form CRUD, form tags, mail templates, messages, additional settings, config validation, status and test submission.
- * Version: 1.0.5
+ * Version: 1.0.6
  * Requires at least: 7.0
  * Requires PHP: 8.0
  * Author: bucagdas
@@ -29,6 +29,25 @@ require_once __DIR__ . '/includes/plugin-update-checker/plugin-update-checker.ph
 	'https://raw.githubusercontent.com/bucagdas/wp-mcp-bridges/main/contact-form-7-mcp-ability/update.json',
 	__FILE__,
 	'contact-form-7-mcp-ability'
+);
+
+// A "Buy me a coffee" link beside Version / By / View details on the Plugins
+// screen. Admin-only, and deliberately not part of any ability output: agents
+// read that text, people read this.
+add_filter(
+	'plugin_row_meta',
+	static function ( $links, $file ) {
+		if ( plugin_basename( __FILE__ ) === $file ) {
+			$links[] = sprintf(
+				'<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>',
+				esc_url( 'https://buymeacoffee.com/bucagdas' ),
+				esc_html__( 'Buy me a coffee', 'contact-form-7-mcp-ability' )
+			);
+		}
+		return $links;
+	},
+	10,
+	2
 );
 
 class Plugin {
